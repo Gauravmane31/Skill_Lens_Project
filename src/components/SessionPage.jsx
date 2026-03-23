@@ -8,8 +8,9 @@ import { C } from "../data/constants.js";
 import { computeIntegrity, computeCodeScore } from "../data/scoring.js";
 import useBreakpoint from "./shared/useBreakpoint.js";
 import { Badge } from "./shared/Atoms.jsx";
+import { submitCode } from "../utils/api.js";
 
-const COMPILER_API = "http://localhost:4000";
+const COMPILER_API = import.meta.env.VITE_COMPILER_API_URL || "http://localhost:4000";
 
 // ── Session Page ──────────────────────────────────────────────────────────────
 function SessionPage({challenge,onSubmit,setPage}){
@@ -65,27 +66,68 @@ function SessionPage({challenge,onSubmit,setPage}){
     setRunning(true);
     setOutput("");
     try{
-      const {data}=await axios.post(
+      const response = await axios.post(
         `${COMPILER_API}/api/run`,
-        {language:lang,code:currentCode,stdin:stdin},
-        {timeout:30000}
+        {
+          language: lang,
+          code: currentCode,
+          stdin,
+        },
+        { timeout: 25000 }
       );
-      setOutput(data.output||"(no output)");
-      const tc=challenge.testCases||[];
-      const results=tc.map((t,i)=>({...t,passed:data.output?.includes(t.expected.replace(/"/g,"")),actual:data.output||"no output"}));
-      setTestResults(results);
-      if(data.error) toast.error("Runtime error");
-      else toast.success("Code executed!");
+
+      const result = response.data;
+      setOutput(result.output || "No output returned.");
+      setTestResults(null);
+
+      if (result.error) {
+        toast.error("Execution failed");
+      } else {
+        toast.success("Execution complete");
+      }
     }catch(err){
       setOutput(`Error: ${err.message}`);
-      toast.error("Could not reach compiler — is the backend running?");
+      toast.error("Could not run code");
     }
     setRunning(false);
   };
 
-  const handleSubmit=()=>{
-    const m={...metricsRef.current,typingDuration:elapsed};
-    onSubmit({challenge,code,lang,metrics:m,integrityScore:computeIntegrity(m),codeScore:computeCodeScore(code),timestamp:new Date().toISOString()});
+  const handleSubmit = async () => {
+    setRunning(true);
+    const m = { ...metricsRef.current, typingDuration: elapsed };
+    const currentCode = editorRef.current?.getValue() ?? code;
+
+    let backendResult = null;
+    try {
+      const computedCodeScore = computeCodeScore(currentCode);
+      const computedIntegrityScore = computeIntegrity(m);
+
+      backendResult = await submitCode({
+        challengeId: challenge.id,
+        code: currentCode,
+        language: lang,
+        codeScore: computedCodeScore,
+        integrityScore: computedIntegrityScore,
+        timeTaken: elapsed,
+        metrics: m,
+      });
+    } catch (err) {
+      toast.error("Error submitting to backend");
+    }
+
+    setRunning(false);
+
+    const finalScore = backendResult ? backendResult.score : computeCodeScore(currentCode);
+    const finalFeedback = backendResult || { strengths: [], weaknesses: [], improvementTips: [], conceptGaps: [] };
+
+    onSubmit({
+      challenge, code: currentCode, lang, metrics: m,
+      integrityScore: computeIntegrity(m),
+      codeScore: finalScore,
+      backendResult: finalFeedback,
+      timestamp: new Date().toISOString()
+    });
+    
     if (document.fullscreenElement && document.exitFullscreen) {
       document.exitFullscreen().catch(e => console.log(e));
     }

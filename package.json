@@ -6,6 +6,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "frontend:dev": "vite",
+    "backend:dev": "cd backend && npm run dev",
+    "compiler:dev": "cd online-compiler && npm run dev",
+    "dev:all": "concurrently -k -n frontend,backend,compiler -c cyan,yellow,green \"npm run frontend:dev\" \"npm run backend:dev\" \"npm run compiler:dev\"",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -14,6 +18,7 @@
     "@monaco-editor/react": "^4.7.0",
     "@supabase/supabase-js": "^2.99.3",
     "axios": "^1.13.6",
+    "mammoth": "^1.12.0",
     "pdfjs-dist": "^5.5.207",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -23,6 +28,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^9.2.1",
     "typescript": "^5.9.3",
     "vite": "^5.0.8"
   }

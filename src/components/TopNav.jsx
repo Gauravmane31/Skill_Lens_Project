@@ -13,6 +13,7 @@ function TopNav({ page, setPage, user, onLogout, notifications, markNotifsRead }
     { id: "challenges", label: "Challenges", icon: "⌨️" },
     { id: "leaderboard", label: "Leaderboard", icon: "🏆" },
     { id: "jobs", label: "Job Board", icon: "💼" },
+    { id: "guidance", label: "Guidance", icon: "🧠" },
     { id: "results", label: "Analytics", icon: "📊" },
     { id: "certificate", label: "Certs", icon: "📜" },
     { id: "profile", label: "Profile", icon: "👤" },

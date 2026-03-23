@@ -1,8 +1,8 @@
 
 import React, { useState } from "react";
-import { C, DUMMY_USERS, DUMMY_SOCIAL } from "../data/constants.js";
+import { C } from "../data/constants.js";
 import useBreakpoint from "../components/shared/useBreakpoint.js";
-import { inputSt, Avatar } from "../components/shared/Atoms.jsx";
+import { inputSt } from "../components/shared/Atoms.jsx";
 import { supabase } from "../utils/supabase.js";
 
 function AuthGate({onLogin,onBack,mode:initMode="login"}){
@@ -15,18 +15,72 @@ function AuthGate({onLogin,onBack,mode:initMode="login"}){
   const [showPw,setShowPw]=useState(false);
   const {isMobile}=useBreakpoint();
 
-  const handleEmail=()=>{
+  const handleEmail=async ()=>{
     setError("");
-    if(mode==="login"){
-      const u=DUMMY_USERS.find(u=>u.email===email&&u.password===password);
-      if(!u){setError("Invalid email or password. Try alex@skilllens.io / password123");return;}
-      onLogin(u);
-    } else {
-      if(!name.trim()){setError("Please enter your name.");return;}
-      if(!email.includes("@")){setError("Enter a valid email.");return;}
-      if(password.length<6){setError("Password must be at least 6 characters.");return;}
-      const newUser={id:Date.now(),name,email,password,avatar:name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(),points:0,streak:0,provider:"email"};
-      onLogin(newUser);
+    if(!email.includes("@")){setError("Enter a valid email.");return;}
+    if(password.length<6){setError("Password must be at least 6 characters.");return;}
+
+    setLoading(true);
+    try {
+      if(mode==="login"){
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          setError(error.message);
+          return;
+        }
+
+        if (data?.user) {
+          const resolvedName = data.user.user_metadata?.full_name || data.user.email;
+          onLogin({
+            id: data.user.id,
+            name: resolvedName,
+            email: data.user.email,
+            avatar: data.user.user_metadata?.avatar_url || resolvedName?.charAt(0)?.toUpperCase() || "U",
+            points: 0,
+            streak: 0,
+            provider: data.user.app_metadata?.provider || "email",
+          });
+        }
+      } else {
+        if(!name.trim()){setError("Please enter your name.");return;}
+
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name,
+            },
+          },
+        });
+
+        if (error) {
+          setError(error.message);
+          return;
+        }
+
+        if (data?.user) {
+          const needsVerification = !data.session;
+          if (needsVerification) {
+            setError("Sign-up successful. Check your inbox to verify your email, then log in.");
+            setMode("login");
+          } else {
+            onLogin({
+              id: data.user.id,
+              name: data.user.user_metadata?.full_name || data.user.email,
+              email: data.user.email,
+              avatar: data.user.user_metadata?.avatar_url || name.charAt(0).toUpperCase(),
+              points: 0,
+              streak: 0,
+              provider: data.user.app_metadata?.provider || "email",
+            });
+          }
+        }
+      }
+    } catch (authError) {
+      setError(authError?.message || "Authentication failed.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -116,7 +170,7 @@ function AuthGate({onLogin,onBack,mode:initMode="login"}){
                 {p:"apple",   icon:"🍎",label:"Apple"},
               ].map(s=>(
                 <button key={s.p} onClick={()=>handleSocial(s.p)} disabled={loading}
-                  style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"10px 12px",background:C.bg,border:`1.5px solid ${C.border}`,borderRadius:9,cursor:"pointer",fontWeight:600,fontSize:13,color:C.text,opacity:loading?.6:1,transition:"all .15s"}}>
+                  style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"10px 12px",background:C.bg,border:`1.5px solid ${C.border}`,borderRadius:9,cursor:"pointer",fontWeight:600,fontSize:13,color:C.text,opacity:loading ? 0.6 : 1,transition:"all .15s"}}>
                   <span style={{fontSize:15}}>{s.icon}</span>{s.label}
                 </button>
               ))}
@@ -153,25 +207,9 @@ function AuthGate({onLogin,onBack,mode:initMode="login"}){
             </div>
           </div>
 
-          {/* Demo accounts */}
           {mode==="login"&&(
-            <div style={{marginTop:16}}>
-              <div style={{fontSize:11,color:C.muted,textAlign:"center",marginBottom:8}}>⚡ Quick demo accounts:</div>
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {DUMMY_USERS.map(u=>(
-                  <button key={u.id} onClick={()=>{setEmail(u.email);setPassword(u.password);}}
-                    style={{display:"flex",alignItems:"center",gap:10,padding:"9px 13px",background:C.white,border:`1px solid ${C.border}`,borderRadius:10,cursor:"pointer",textAlign:"left",transition:"all .15s"}}
-                    onMouseEnter={e=>e.currentTarget.style.borderColor=C.indigo}
-                    onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
-                    <Avatar initials={u.avatar} size={28}/>
-                    <div style={{flex:1}}>
-                      <div style={{fontWeight:700,fontSize:12}}>{u.name}</div>
-                      <div style={{fontSize:11,color:C.muted}}>{u.email}</div>
-                    </div>
-                    <span style={{fontSize:11,color:C.indigo,fontWeight:600}}>Use →</span>
-                  </button>
-                ))}
-              </div>
+            <div style={{marginTop:16,padding:"10px 12px",background:C.white,border:`1px solid ${C.border}`,borderRadius:10,color:C.muted,fontSize:12,lineHeight:1.6}}>
+              Tip: Use Sign up to create an account with Supabase Auth, then log in here.
             </div>
           )}
         </div>

@@ -28,7 +28,7 @@ const supabaseAdmin = createClient(
 
 // ── Express app ───────────────────────────────────────────────────────────────
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
 app.use(express.json());
@@ -44,6 +44,13 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20,
   message: { error: "Too many requests. Please wait 15 minutes." },
+});
+
+// Optional limiter for profile write operations
+const profileLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: "Too many profile updates. Please try again in a minute." },
 });
 
 // ── Helper ────────────────────────────────────────────────────────────────────
@@ -62,6 +69,21 @@ function userPayload(user) {
     provider: user.app_metadata?.provider || "email",
     points: 0,
   };
+}
+
+async function requireUser(req, res, next) {
+  try {
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    if (!token) return res.status(401).json({ error: "No token provided." });
+
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) return res.status(401).json({ error: "Invalid or expired token." });
+
+    req.user = data.user;
+    return next();
+  } catch {
+    return res.status(401).json({ error: "Unauthorized." });
+  }
 }
 
 // ── Health check ──────────────────────────────────────────────────────────────
@@ -241,6 +263,66 @@ app.post("/api/auth/reset-password", authLimiter, async (req, res) => {
   return res.json({ message: "If that email exists, a reset link has been sent." });
 });
 
+// ── Resume Profile persistence ───────────────────────────────────────────────
+// GET /api/profile/resume
+app.get("/api/profile/resume", requireUser, async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from("resume_profiles")
+    .select("profile, resume_text, resume_file_name, updated_at")
+    .eq("user_id", req.user.id)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "42P01") {
+      return res.status(500).json({
+        error: "resume_profiles table not found.",
+        setupRequired: true,
+        hint: "Run supabase/schema.sql in Supabase SQL Editor to create resume_profiles.",
+      });
+    }
+    return res.status(500).json({ error: error.message });
+  }
+
+  return res.json({
+    profile: data?.profile || null,
+    resumeText: data?.resume_text || "",
+    resumeFileName: data?.resume_file_name || "",
+    updatedAt: data?.updated_at || null,
+  });
+});
+
+// PUT /api/profile/resume
+// Body: { profile: object, resumeText?: string, resumeFileName?: string }
+app.put("/api/profile/resume", requireUser, profileLimiter, async (req, res) => {
+  const { profile, resumeText = "", resumeFileName = "" } = req.body || {};
+  if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
+    return res.status(400).json({ error: "profile object is required." });
+  }
+
+  const payload = {
+    user_id: req.user.id,
+    profile,
+    resume_text: String(resumeText || "").slice(0, 200000),
+    resume_file_name: String(resumeFileName || "").slice(0, 300),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabaseAdmin.from("resume_profiles").upsert(payload, { onConflict: "user_id" });
+
+  if (error) {
+    if (error.code === "42P01") {
+      return res.status(500).json({
+        error: "resume_profiles table not found.",
+        setupRequired: true,
+        hint: "Run supabase/schema.sql in Supabase SQL Editor to create resume_profiles.",
+      });
+    }
+    return res.status(500).json({ error: error.message });
+  }
+
+  return res.json({ message: "Profile saved successfully." });
+});
+
 // ── Start server ──────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n🧠 SkillLens Backend running on http://localhost:${PORT}`);
@@ -254,4 +336,7 @@ app.listen(PORT, () => {
   console.log("   POST /api/auth/refresh");
   console.log("   POST /api/auth/logout");
   console.log("   POST /api/auth/reset-password\n");
+  console.log("   Resume profile endpoints:");
+  console.log("   GET  /api/profile/resume");
+  console.log("   PUT  /api/profile/resume\n");
 });

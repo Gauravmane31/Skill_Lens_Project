@@ -4,6 +4,7 @@ import toast, { Toaster } from "react-hot-toast";
 import GlobalStyle from "./components/shared/GlobalStyle.jsx";
 import { NOTIFS_INIT } from "./data/constants.js";
 import { supabase } from "./utils/supabase.js";
+import { syncUserProfile } from "./utils/api.js";
 
 import PublicNav from "./components/PublicNav.jsx";
 import LandingPage from "./components/LandingPage.jsx";
@@ -17,6 +18,7 @@ import CertificatePage from "./components/CertificatePage.jsx";
 import LeaderboardPage from "./components/LeaderboardPage.jsx";
 import JobBoardPage from "./components/JobBoardPage.jsx";
 import ResumePage from "./components/ResumePage.jsx";
+import CareerGuidancePage from "./components/CareerGuidancePage.jsx";
 
 // ── Root App ──────────────────────────────────────────────────────────────────
 export default function SkillLens(){
@@ -44,19 +46,33 @@ export default function SkillLens(){
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleSupabaseUser = (sUser) => {
+  const handleSupabaseUser = async (sUser) => {
     let name = sUser.user_metadata?.full_name || sUser.email;
     let fallbackAvatar = name ? name[0].toUpperCase() : "U";
+    let syncedProfile = null;
+    
+    // Sync profile data in Supabase public schema.
+    try {
+      syncedProfile = await syncUserProfile(
+        sUser.id,
+        sUser.email,
+        sUser.user_metadata?.full_name || sUser.email,
+        sUser.user_metadata?.avatar_url || fallbackAvatar
+      );
+    } catch (e) {
+      console.error("Failed to sync user profile:", e);
+    }
+
     setUser(prev => ({
       id: sUser.id,
       name: name,
       email: sUser.email,
       avatar: sUser.user_metadata?.avatar_url || fallbackAvatar,
-      points: prev?.points || 0, // preserve points during background auth token refresh
+      points: syncedProfile?.points ?? prev?.points ?? 0,
+      streak: syncedProfile?.streak ?? prev?.streak ?? 0,
       provider: sUser.app_metadata.provider || "email"
     }));
     setScreen("app");
-    // Removed setPage("dashboard") so tab-switching doesn't kick users out of the active session
   };
 
   const renderPage=()=>{
@@ -68,6 +84,7 @@ export default function SkillLens(){
       case "certificate": return <CertificatePage results={results} user={user}/>;
       case "leaderboard": return <LeaderboardPage user={user} results={results}/>;
       case "jobs":        return <JobBoardPage results={results}/>;
+      case "guidance":    return <CareerGuidancePage user={user}/>;
       case "profile":     return <ResumePage user={user} results={results}/>;
       default:            return <DashboardPage results={results} user={user} setPage={setPage} setSelectedChallenge={setSelectedChallenge}/>;
     }

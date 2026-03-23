@@ -5,13 +5,39 @@ import { scoreColor, integrityLabel, jobSuggestions, skillGaps, aiAnalysis } fro
 import useBreakpoint from "./shared/useBreakpoint.js";
 import { Badge, ProgressBar, CircleScore, Card, SectionHeader, Pill } from "./shared/Atoms.jsx";
 import { Avatar } from "./shared/Atoms.jsx";
+import { fetchUserProfile, fetchLearningPath, fetchCareerGuidance, fetchGapAnalysis } from "../utils/api.js";
+import { useState, useEffect } from "react";
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 function DashboardPage({results,user,setPage,setSelectedChallenge}){
   const {isMobile}=useBreakpoint();
   const latest=results.length?results[results.length-1]:null;
-  const roles=latest?jobSuggestions(latest.codeScore,latest.integrityScore):[];
-  const gaps=latest?skillGaps(latest.codeScore):[];
+  const [profileData, setProfileData] = useState(null);
+  const [learningPath, setLearningPath] = useState([]);
+  const [careerGuidance, setCareerGuidance] = useState(null);
+  const [gapAnalysis, setGapAnalysis] = useState(null);
+
+  useEffect(() => {
+    if (user?.id) {
+       fetchUserProfile(user.id).then(setProfileData).catch(console.error);
+       fetchLearningPath(user.id).then(setLearningPath).catch(console.error);
+       fetchCareerGuidance(user.id).then(setCareerGuidance).catch(console.error);
+    }
+  }, [user?.id]);
+
+    useEffect(() => {
+      if (user?.id && careerGuidance?.recommendedRoles?.length > 0) {
+        fetchGapAnalysis(user.id, careerGuidance.recommendedRoles[0]).then(setGapAnalysis).catch(console.error);
+      }
+    }, [careerGuidance, user?.id]);
+
+  const roles = profileData?.recommendedRoles?.length 
+      ? profileData.recommendedRoles.map(r => ({role: r, prob: 95, color: C.indigo})) 
+      : (latest?jobSuggestions(latest.codeScore,latest.integrityScore):[]);
+      
+  const gaps = profileData?.weaknesses?.length 
+      ? profileData.weaknesses.map(w => `Consider practicing more challenges in ${w} to improve your domain score.`)
+      : (latest?skillGaps(latest.codeScore):[]);
   const completedIds=new Set(results.map(r=>r.challenge.id));
   const totalXP=results.reduce((a,r)=>a+(r.challenge.xp||100),0);
   const avgScore=results.length?Math.round(results.reduce((a,r)=>a+r.codeScore,0)/results.length):null;
@@ -144,42 +170,62 @@ function DashboardPage({results,user,setPage,setSelectedChallenge}){
               </div>
             </Card>
 
-            {/* Job Suggestions */}
+            {/* Skill Gap Analysis / Target Role */}
             <Card>
-              <SectionHeader title="💼 Job Suggestions" sub={latest?"Based on your latest score":"Complete a challenge to unlock personalised matches"} action={
-                <button onClick={()=>setPage("jobs")} style={{background:"none",border:"none",color:C.indigo,fontWeight:700,fontSize:13,cursor:"pointer"}}>Browse jobs →</button>
+              <SectionHeader title="🎯 Target Role Analysis" sub={careerGuidance?.recommendedRoles?.length > 0 ? `Evaluating readiness for: ${careerGuidance.recommendedRoles[0]}` : "Identify your skill gaps"} action={
+                <button onClick={()=>setPage("jobs")} style={{background:"none",border:"none",color:C.indigo,fontWeight:700,fontSize:13,cursor:"pointer"}}>View all skills →</button>
               }/>
-              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10,marginBottom:12}}>
-                {(latest?roles:[
-                  {role:"Backend Developer",prob:78,color:C.indigo},
-                  {role:"Full-Stack Engineer",prob:71,color:C.indigo},
-                  {role:"Junior Developer",prob:72,color:C.indigo},
-                  {role:"Frontend Developer",prob:61,color:C.indigo},
-                ]).map((r,i)=>{
-                  const icons=["⚙️","🌐","🚀","🎨"];
-                  return(
-                    <div key={r.role} className="sl-card-hover" style={{background:i%2===0?C.indigoLight:C.bg,borderRadius:12,padding:"12px 14px",border:`1px solid ${i%2===0?C.indigo+"25":C.border}`}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
-                        <span style={{fontSize:18}}>{icons[i%4]}</span>
-                        <span style={{fontWeight:900,fontSize:18,color:C.indigo}}>{r.prob}<span style={{fontSize:11}}>%</span></span>
+              
+              {gapAnalysis ? (
+                  <>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                          <span style={{fontSize:13,fontWeight:700,color:C.text}}>Overall Readiness</span>
+                          <span style={{fontSize:18,fontWeight:900,color:scoreColor(gapAnalysis.readinessScore)}}>{gapAnalysis.readinessScore}%</span>
                       </div>
-                      <div style={{fontWeight:800,fontSize:12,marginBottom:5,color:C.text}}>{r.role}</div>
-                      <ProgressBar value={r.prob} color={C.indigo} height={3}/>
-                    </div>
-                  );
-                })}
-              </div>
-              {!latest&&(
-                <div style={{background:C.bg,borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{fontSize:24}}>🎯</span>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:700,fontSize:13,marginBottom:2}}>Unlock your personal match score</div>
-                    <div style={{fontSize:12,color:C.muted}}>Scores above are averages. Complete a challenge to get yours.</div>
+                      <ProgressBar value={gapAnalysis.readinessScore} color={scoreColor(gapAnalysis.readinessScore)} height={6} />
+                      <p style={{fontSize:11,color:C.muted,marginTop:10,marginBottom:14,borderLeft:`2px solid ${C.indigo}`,paddingLeft:8}}>{gapAnalysis.explanation}</p>
+                      
+                      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
+                          <div style={{background:"rgba(239,68,68,.1)",borderRadius:10,padding:12,border:"1px solid rgba(239,68,68,.2)"}}>
+                              <div style={{fontSize:10,fontWeight:800,color:"#ef4444",textTransform:"uppercase",marginBottom:8,display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:14}}>⚠️</span> Missing Skills</div>
+                              {(gapAnalysis.missingSkills || []).length
+                                ? (gapAnalysis.missingSkills || []).map(s => <div key={s} style={{fontSize:11,fontWeight:600,color:C.text,marginBottom:3}}>• {s}</div>)
+                                : <div style={{fontSize:11,color:C.muted}}>No missing skills mapped yet!</div>}
+                          </div>
+                          <div style={{background:"rgba(245,158,11,.1)",borderRadius:10,padding:12,border:"1px solid rgba(245,158,11,.2)"}}>
+                              <div style={{fontSize:10,fontWeight:800,color:"#f59e0b",textTransform:"uppercase",marginBottom:8,display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:14}}>📉</span> Weak Domains</div>
+                              {(gapAnalysis.weakAreas || []).length
+                                ? (gapAnalysis.weakAreas || []).map(a => <div key={a} style={{fontSize:11,fontWeight:600,color:C.text,marginBottom:3}}>• {a.split('(')[0].trim()}</div>)
+                                : <div style={{fontSize:11,color:C.muted}}>No weak domains!</div>}
+                          </div>
+                      </div>
+                  </>
+              ) : (
+                  <div style={{padding:"20px",textAlign:"center",background:C.bg,borderRadius:10}}>
+                      <div style={{fontSize:24,marginBottom:6}}>🔍</div>
+                      <div style={{fontSize:12,color:C.muted}}>Complete your first phase of evaluation to unlock AI gap analysis.</div>
                   </div>
-                  <button onClick={()=>setPage("challenges")} style={{padding:"7px 14px",background:C.indigo,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",flexShrink:0}}>Start →</button>
-                </div>
               )}
             </Card>
+
+            {/* Learning Recommendations */}
+            {learningPath && learningPath.length > 0 && (
+              <Card>
+                  <SectionHeader title="📚 Recommended Learning" sub="Curated resources to close your skill gaps"/>
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      {learningPath.map((item, i) => (
+                          <div key={i} style={{padding:"12px 14px",background:C.indigoLight,borderRadius:10,border:`1px solid ${C.indigo}40`,display:"flex",alignItems:"center",gap:12}}>
+                              <div style={{fontSize:20}}>{item.type==='course'?'🎓':item.type==='project'?'🛠️':'💻'}</div>
+                              <div style={{flex:1}}>
+                                  <div style={{fontSize:13,fontWeight:800,color:C.indigo,marginBottom:2}}>{item.title}</div>
+                                    <div style={{fontSize:10,color:C.textMid,lineHeight:1.4}}>{item.reason || item.reasonTemplate}</div>
+                              </div>
+                              <button className="sl-btn-hover" style={{padding:"6px 14px",background:C.indigo,color:"#fff",border:"none",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer"}}>Start</button>
+                          </div>
+                      ))}
+                  </div>
+              </Card>
+            )}
           </div>
 
           {/* RIGHT SIDEBAR */}
@@ -202,27 +248,57 @@ function DashboardPage({results,user,setPage,setSelectedChallenge}){
               ))}
             </Card>
 
-            {/* Career Matches */}
+            {/* Advanced AI Career Guidance */}
             <Card style={{background:`linear-gradient(135deg, ${C.dark} 0%, #1e1b4b 100%)`,border:"1px solid rgba(255,255,255,.08)"}}>
-              <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(99,102,241,.2)",border:"1px solid rgba(99,102,241,.35)",borderRadius:99,padding:"4px 12px",marginBottom:10}}>
-                <span style={{width:5,height:5,background:"#818cf8",borderRadius:"50%",display:"inline-block"}}/>
-                <span style={{fontSize:10,fontWeight:600,color:"#c7d2fe",letterSpacing:.3}}>Career Pathways</span>
+              <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(99,102,241,.2)",border:"1px solid rgba(99,102,241,.35)",borderRadius:99,padding:"4px 12px",marginBottom:12}}>
+                <span style={{width:5,height:5,background:"#818cf8",borderRadius:"50%",display:"inline-block",boxShadow:"0 0 8px #818cf8"}}/>
+                <span style={{fontSize:10,fontWeight:700,color:"#c7d2fe",letterSpacing:.5,textTransform:"uppercase"}}>AI Career Mentor</span>
               </div>
-              <h3 style={{fontWeight:800,fontSize:14,margin:"0 0 3px",color:"#fff"}}>Career Matches</h3>
-              <p style={{color:"#64748b",fontSize:11,margin:"0 0 12px"}}>Based on your performance</p>
-              {latest?roles.map(r=>(
-                <div key={r.role} style={{marginBottom:10}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,gap:6}}>
-                    <span style={{fontSize:12,fontWeight:600,color:"#cbd5e1",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.role}</span>
-                    <span style={{fontSize:12,fontWeight:800,color:r.color,flexShrink:0}}>{r.prob}%</span>
+              
+              {careerGuidance ? (
+                  <>
+                        {(careerGuidance?.recommendedRoles || []).length > 0 && (
+                          <div style={{marginBottom:14}}>
+                              <div style={{fontSize:10,color:"#cbd5e1",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Top Recommended Role</div>
+                              <div style={{fontSize:18,fontWeight:900,color:"#a5b4fc",marginBottom:6}}>{careerGuidance.recommendedRoles[0]}</div>
+                              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+                                  <div style={{fontSize:10,color:"#94a3b8"}}>Confidence</div>
+                                  <div style={{flex:1,height:4,background:"rgba(255,255,255,.1)",borderRadius:99,overflow:"hidden"}}>
+                                      <div style={{height:"100%",width:`${careerGuidance.confidenceScore}%`,background:scoreColor(careerGuidance.confidenceScore)}}/>
+                                  </div>
+                                  <div style={{fontSize:10,fontWeight:800,color:"#cbd5e1"}}>{careerGuidance.confidenceScore}%</div>
+                              </div>
+                          </div>
+                      )}
+                      
+                      <div style={{background:"rgba(255,255,255,.05)",padding:"12px 14px",borderRadius:10,borderLeft:"3px solid #818cf8",marginBottom:12}}>
+                          <div style={{fontSize:11,color:"#e2e8f0",lineHeight:1.5,fontWeight:500}}>"{careerGuidance.reasoning}"</div>
+                      </div>
+                      
+                      {careerGuidance.growthPath && (
+                          <div style={{marginBottom:12}}>
+                              <div style={{fontSize:11,fontWeight:800,color:"#94a3b8",marginBottom:4,display:"flex",alignItems:"center",gap:4}}><span>📈</span> Suggested Growth Path</div>
+                              <div style={{fontSize:11,color:"#cbd5e1",lineHeight:1.5}}>{careerGuidance.growthPath}</div>
+                          </div>
+                      )}
+                      
+                        {(careerGuidance?.alternativeRoles || []).length > 0 && (
+                          <div style={{marginTop:12,borderTop:"1px solid rgba(255,255,255,.08)",paddingTop:12}}>
+                              <div style={{fontSize:10,color:"#64748b",textTransform:"uppercase",marginBottom:6}}>Alternative Pathways</div>
+                              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                                  {careerGuidance.alternativeRoles.map((alt, i) => (
+                                      <div key={i} style={{fontSize:10,fontWeight:600,color:"#cbd5e1",background:"rgba(255,255,255,.08)",padding:"3px 8px",borderRadius:6}}>{alt}</div>
+                                  ))}
+                              </div>
+                          </div>
+                      )}
+                  </>
+              ) : (
+                  <div style={{background:"rgba(255,255,255,.05)",borderRadius:10,padding:"16px",textAlign:"center"}}>
+                    <div style={{fontSize:22,marginBottom:8}}>🤖</div>
+                    <div style={{fontSize:12,fontWeight:700,color:"#cbd5e1",marginBottom:2}}>AI Mentor is thinking...</div>
+                    <p style={{color:"#64748b",fontSize:11,margin:0,lineHeight:1.4}}>Submit your first challenge to get personalized AI career guidance.</p>
                   </div>
-                  <ProgressBar value={r.prob} color={r.color} height={4}/>
-                </div>
-              )):(
-                <div style={{background:"rgba(255,255,255,.05)",borderRadius:10,padding:"14px",textAlign:"center"}}>
-                  <div style={{fontSize:22,marginBottom:5}}>🎯</div>
-                  <p style={{color:"#64748b",fontSize:11}}>Complete a challenge to unlock job matches.</p>
-                </div>
               )}
             </Card>
 

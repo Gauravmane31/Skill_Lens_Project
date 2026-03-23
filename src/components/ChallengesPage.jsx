@@ -1,8 +1,8 @@
-
-import React, { useState } from "react";
-import { C, CHALLENGES } from "../data/constants.js";
+import React, { useState, useEffect } from "react";
+import { C, CHALLENGES as STATIC_CHALLENGES } from "../data/constants.js";
 import useBreakpoint from "./shared/useBreakpoint.js";
 import { Card, Badge, ProgressBar, Pill, PageHero, inputSt } from "./shared/Atoms.jsx";
+import { fetchProblems } from "../utils/api.js";
 
 // ── Challenges Page ───────────────────────────────────────────────────────────
 function ChallengesPage({setPage,setSelectedChallenge,results}){
@@ -10,10 +10,33 @@ function ChallengesPage({setPage,setSelectedChallenge,results}){
   const [search,setSearch]=useState("");
   const [diffFilter,setDiffFilter]=useState("All");
   const {isMobile}=useBreakpoint();
-  const cats=["All",...new Set(CHALLENGES.map(c=>c.category))];
+  const [dbProblems, setDbProblems] = useState([]);
+  
+  useEffect(() => {
+    fetchProblems().then(data => {
+      // Merge with static metadata for UI (icons, colors, etc.)
+      const merged = data.map(dbP => {
+        const staticMatch = STATIC_CHALLENGES.find(sc => sc.title === dbP.title) || STATIC_CHALLENGES[0];
+        return {
+          ...dbP,
+          category: dbP.domain,
+          xp: 100,
+          timeLimit: 30,
+          pastel: staticMatch.pastel || C.pastelBlue,
+          accent: staticMatch.accent || C.indigo,
+          icon: staticMatch.icon || "⌨️",
+          tags: [dbP.domain, dbP.difficulty],
+          starterCode: staticMatch.starterCode || {}
+        };
+      });
+      setDbProblems(merged);
+    }).catch(e => console.error("Failed to load problems", e));
+  }, []);
+
+  const cats=["All",...new Set(dbProblems.map(c=>c.category))];
   const diffs=["All","Easy","Medium","Hard"];
   const completedIds=new Set(results.map(r=>r.challenge.id));
-  const filtered=CHALLENGES
+  const filtered=dbProblems
     .filter(c=>filter==="All"||c.category===filter)
     .filter(c=>diffFilter==="All"||c.difficulty===diffFilter)
     .filter(c=>!search||c.title.toLowerCase().includes(search.toLowerCase())||c.tags.some(t=>t.toLowerCase().includes(search.toLowerCase())));
@@ -21,16 +44,16 @@ function ChallengesPage({setPage,setSelectedChallenge,results}){
 
   return(
     <div style={{overflowY:"auto",flex:1,background:C.bg}}>
-      <PageHero tag="⌨️ Coding Challenges" title="Solve. Prove. Certify." sub={`${CHALLENGES.length} challenges across 8 categories. Earn XP and certificates.`}/>
+      <PageHero tag="⌨️ Coding Challenges" title="Solve. Prove. Certify." sub={`${dbProblems.length} challenges across categories. Earn XP and certificates.`}/>
       <div className="sl-page-wrap" style={{padding:isMobile?"16px 14px":"20px 24px"}}>
         {/* Stats row */}
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)",gap:12,marginBottom:18}}>
           {[
-            {v:CHALLENGES.length,l:"Total",a:C.indigo},
+            {v:dbProblems.length,l:"Total",a:C.indigo},
             {v:completedIds.size,l:"Solved",a:C.indigo},
-            {v:CHALLENGES.length-completedIds.size,l:"Remaining",a:C.indigo},
+            {v:dbProblems.length-completedIds.size,l:"Remaining",a:C.indigo},
             {v:avgScore??"—",l:"Avg Score",a:C.indigo},
-            {v:CHALLENGES.filter(c=>c.difficulty==="Hard").length,l:"Hard",a:C.indigo},
+            {v:dbProblems.filter(c=>c.difficulty==="Hard").length,l:"Hard",a:C.indigo},
           ].map(s=>(
             <Card key={s.l} style={{padding:"12px 14px",textAlign:"center"}}>
               <div style={{fontWeight:900,fontSize:isMobile?18:22,color:s.a}}>{s.v}</div>

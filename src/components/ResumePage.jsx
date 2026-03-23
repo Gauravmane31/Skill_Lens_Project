@@ -1,11 +1,464 @@
 
-import React, { useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { C } from "../data/constants.js";
 import { scoreColor, integrityLabel } from "../data/scoring.js";
 import useBreakpoint from "./shared/useBreakpoint.js";
 import { PageHero, Card, inputSt, ProgressBar, CircleScore, Avatar } from "./shared/Atoms.jsx";
+import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
+import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import mammoth from "mammoth/mammoth.browser";
+import { loadResumeProfile, saveResumeProfile } from "../utils/api.js";
 
 const EMPTY_PROFILE={fullName:"",email:"",phone:"",location:"",headline:"",summary:"",linkedin:"",github:"",portfolio:"",jobTitle:"",jobType:"",remotePreference:"",availability:"",salaryMin:"",salaryMax:"",noticePeriod:"",experience:[],education:[],skills:[],languages:[],certifications:[]};
+
+GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
+
+const uniq = (arr = []) => Array.from(new Set(arr.filter(Boolean).map((v) => String(v).trim()).filter(Boolean)));
+const toTitleCase = (value = "") =>
+  value
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const safeUrl = (value = "") => {
+  if (!value) return "";
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+};
+
+const roleWordRx = /(engineer|developer|intern|analyst|consultant|architect|manager|lead|scientist|specialist|full.?stack|frontend|backend|sde)/i;
+const dateRangeRx = /(\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b[\w\s,.-]*\d{2,4}|\b\d{4}\b)\s*(?:-|to|–|—)\s*(present|current|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b[\w\s,.-]*\d{2,4}|\b\d{4}\b)/i;
+const shortDateRangeRx = /\b(19|20)\d{2}\b\s*(?:-|to|–|—)\s*\b(19|20)\d{2}|present|current\b/i;
+
+const isLikelyName = (line = "") => {
+  if (!line) return false;
+  if (line.length < 4 || line.length > 60) return false;
+  if (!/^[A-Za-z][A-Za-z .'-]+$/.test(line)) return false;
+  if (line.split(" ").length > 5) return false;
+  if (/@|linkedin|github|http|resume|curriculum/i.test(line)) return false;
+  if (roleWordRx.test(line)) return false;
+  return true;
+};
+
+const splitDates = (line = "") => {
+  const m = line.match(dateRangeRx);
+  if (!m) {
+    const years = line.match(/\b(19|20)\d{2}\b/g) || [];
+    if (years.length >= 2) return { from: years[0], to: years[1] };
+    if (years.length === 1 && /present|current/i.test(line)) return { from: years[0], to: "Present" };
+    return { from: "", to: "" };
+  }
+  return { from: (m[1] || "").trim(), to: (m[2] || "").trim() };
+};
+
+const cleanLine = (line = "") =>
+  String(line)
+    .replace(/^[\u2022\-*\d.)\s]+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const companyHintRx = /(inc\.?|llc|ltd\.?|pvt\.?\s*ltd\.?|technologies|tech|solutions|systems|labs|corp\.?|company|services|consulting|software|private limited)/i;
+const locationHintRx = /(remote|on-?site|hybrid|india|usa|uk|canada|singapore|bangalore|bengaluru|hyderabad|mumbai|pune|delhi|gurugram|chennai)/i;
+
+const looksLikeCompany = (line = "") => {
+  if (!line || line.length < 2 || line.length > 90) return false;
+  if (dateRangeRx.test(line) || /@|https?:\/\//i.test(line)) return false;
+  if (companyHintRx.test(line)) return true;
+  const words = line.split(" ");
+  return words.length >= 2 && words.length <= 8 && /^[A-Za-z0-9&.,'()\-\s]+$/.test(line) && !roleWordRx.test(line);
+};
+
+const looksLikeLocation = (line = "") => {
+  if (!line) return false;
+  return locationHintRx.test(line) || /,\s*[A-Za-z]{2,}/.test(line);
+};
+
+const looksLikeContactNoise = (line = "") => /@|https?:\/\/|linkedin\.com|github\.com/i.test(line);
+
+const splitByPipesOrBullets = (line = "") =>
+  String(line)
+    .split(/\||•|\u2022/)
+    .map(cleanLine)
+    .filter(Boolean);
+
+const normalizeTextValue = (value = "") =>
+  String(value)
+    .replace(/\s+/g, " ")
+    .replace(/^[,;|\-\s]+|[,;|\-\s]+$/g, "")
+    .trim();
+
+const dedupeByKey = (arr = [], keyFn = (v) => v) => {
+  const seen = new Set();
+  const out = [];
+  arr.forEach((item) => {
+    const key = keyFn(item);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push(item);
+  });
+  return out;
+};
+
+const parseExperienceCompositeLine = (line = "") => {
+  const parts = splitByPipesOrBullets(line);
+  if (!parts.length) return null;
+
+  const datePart = parts.find((p) => dateRangeRx.test(p) || shortDateRangeRx.test(p)) || "";
+  const { from, to } = splitDates(datePart);
+  const titlePart = parts.find((p) => roleWordRx.test(p)) || "";
+  const companyPart = parts.find((p) => p !== titlePart && looksLikeCompany(p)) || "";
+  const locationPart = parts.find((p) => looksLikeLocation(p)) || "";
+
+  if (!titlePart && !companyPart) return null;
+  return {
+    title: normalizeTextValue(titlePart),
+    company: normalizeTextValue(companyPart),
+    location: normalizeTextValue(locationPart),
+    from: normalizeTextValue(from),
+    to: normalizeTextValue(to),
+    description: "",
+  };
+};
+
+const looksLikeDegree = (line = "") => degreeRx.test(line);
+const looksLikeInstitution = (line = "") => instituteRx.test(line) || looksLikeCompany(line);
+
+const splitFieldFromDegree = (degreeLine = "") => {
+  if (!degreeLine) return { degree: "", field: "" };
+  const inMatch = degreeLine.match(/\b(?:in|of)\s+([A-Za-z &/\-.]{3,})$/i);
+  const bracketMatch = degreeLine.match(/\(([^)]+)\)/);
+  const field = (inMatch?.[1] || bracketMatch?.[1] || "").trim();
+  return {
+    degree: degreeLine.trim(),
+    field,
+  };
+};
+
+const gpaRx = /(cgpa|gpa)\s*[:\-]?\s*([0-9]+(?:\.[0-9]+)?(?:\s*\/\s*[0-9]+(?:\.[0-9]+)?)?)/i;
+
+const parseExperienceEntries = (lines = []) => {
+  const clean = lines.map(cleanLine).filter(Boolean);
+  const entries = [];
+
+  // First pass: parse compact one-line patterns (Title | Company | Date | Location).
+  clean.forEach((line) => {
+    const parsed = parseExperienceCompositeLine(line);
+    if (parsed) entries.push(parsed);
+  });
+
+  // Prefer date-anchored blocks because most resumes place a date range per role.
+  for (let i = 0; i < clean.length; i += 1) {
+    const line = clean[i];
+    if (!dateRangeRx.test(line) && !shortDateRangeRx.test(line)) continue;
+
+    const prev1 = clean[i - 1] || "";
+    const prev2 = clean[i - 2] || "";
+    const next1 = clean[i + 1] || "";
+    const next2 = clean[i + 2] || "";
+
+    const title = [prev1, prev2, next1].find((v) => roleWordRx.test(v) && v.length <= 90 && !looksLikeContactNoise(v)) || "";
+    const company = [prev1, prev2, next1, next2].find((v) => v !== title && looksLikeCompany(v)) || "";
+    const location = [prev1, prev2, next1, next2].find((v) => looksLikeLocation(v)) || "";
+    const { from, to } = splitDates(line);
+
+    const descLines = [];
+    for (let j = i + 1; j < Math.min(i + 7, clean.length); j += 1) {
+      const candidate = clean[j];
+      if (dateRangeRx.test(candidate)) break;
+      if (candidate === title || candidate === company || candidate === location) continue;
+      if (candidate.length >= 20) descLines.push(candidate);
+    }
+
+    const description = descLines.join(" ").slice(0, 380);
+
+    if (!title && !company) continue;
+
+    entries.push({
+      title: normalizeTextValue(title),
+      company: normalizeTextValue(company),
+      location: normalizeTextValue(location),
+      from: normalizeTextValue(from),
+      to: normalizeTextValue(to),
+      description,
+    });
+
+    if (entries.length >= 3) break;
+  }
+
+  // Fallback for resumes that omit date ranges.
+  if (!entries.length) {
+    for (let i = 0; i < clean.length; i += 1) {
+      const line = clean[i];
+      if (!roleWordRx.test(line)) continue;
+
+      const next = clean[i + 1] || "";
+      const n2 = clean[i + 2] || "";
+      const dateSource = [line, next, n2].find((v) => dateRangeRx.test(v)) || "";
+      const { from, to } = splitDates(dateSource);
+
+      entries.push({
+        title: normalizeTextValue(line),
+        company: normalizeTextValue(looksLikeCompany(next) ? next : ""),
+        location: normalizeTextValue(looksLikeLocation(next) ? next : looksLikeLocation(n2) ? n2 : ""),
+        from: normalizeTextValue(from),
+        to: normalizeTextValue(to),
+        description: [n2, clean[i + 3] || ""].filter((v) => v && v.length >= 20).join(" ").slice(0, 320),
+      });
+
+      if (entries.length >= 3) break;
+    }
+  }
+
+  return dedupeByKey(entries, (e) => `${(e.title || "").toLowerCase()}|${(e.company || "").toLowerCase()}|${e.from}|${e.to}`)
+    .filter((e) => e.title || e.company)
+    .slice(0, 4);
+};
+
+const degreeRx = /(b\.tech|btech|be\b|b\.e\.|m\.tech|mtech|bca|mca|bsc|msc|bachelor|master|mba|phd)/i;
+const instituteRx = /(university|college|school|institute|iit|nit)/i;
+
+const parseEducationEntries = (lines = []) => {
+  const clean = lines.map(cleanLine).filter(Boolean);
+  const entries = [];
+
+  for (let i = 0; i < clean.length; i += 1) {
+    const line = clean[i];
+    const next = clean[i + 1] || "";
+    const prev = clean[i - 1] || "";
+
+    if (!looksLikeDegree(line) && !looksLikeInstitution(line) && !dateRangeRx.test(line)) continue;
+
+    const degreeLine = [line, next, prev].find((v) => looksLikeDegree(v) && !looksLikeContactNoise(v)) || "";
+    const institution = [line, next, prev].find((v) => looksLikeInstitution(v) && !looksLikeDegree(v) && !looksLikeContactNoise(v)) || "";
+    const dateLine = [line, next, prev, clean[i + 2] || ""].find((v) => dateRangeRx.test(v) || /\b(19|20)\d{2}\b/.test(v)) || "";
+    const { from, to } = splitDates(dateLine);
+    const gpaLine = [line, next, prev, clean[i + 2] || ""].find((v) => gpaRx.test(v)) || "";
+    const gpa = gpaLine.match(gpaRx)?.[2] || "";
+    const { degree, field } = splitFieldFromDegree(degreeLine);
+
+    const fromYear = from || (dateLine.match(/\b(19|20)\d{2}\b/)?.[0] || "");
+    const toYear = to || (dateLine.match(/\b(19|20)\d{2}\b/g)?.[1] || "");
+
+    if (!degree && !institution) continue;
+
+    entries.push({
+      degree: normalizeTextValue(degree),
+      institution: normalizeTextValue(institution),
+      field: normalizeTextValue(field),
+      from: normalizeTextValue(fromYear),
+      to: normalizeTextValue(toYear),
+      gpa: normalizeTextValue(gpa),
+    });
+
+    if (entries.length >= 3) break;
+  }
+  return dedupeByKey(entries, (e) => `${(e.degree || "").toLowerCase()}|${(e.institution || "").toLowerCase()}|${e.from}|${e.to}`)
+    .filter((e) => e.degree || e.institution)
+    .slice(0, 4);
+};
+
+const mergeParsedProfile = (prev, parsed) => {
+  const next = { ...prev };
+
+  if (parsed.fullName && isLikelyName(parsed.fullName)) next.fullName = parsed.fullName;
+  if (parsed.email && /@/.test(parsed.email)) next.email = parsed.email;
+  if (parsed.phone && parsed.phone.replace(/\D/g, "").length >= 8) next.phone = parsed.phone;
+  if (parsed.location && parsed.location.length >= 3) next.location = parsed.location;
+
+  if (parsed.headline && roleWordRx.test(parsed.headline)) next.headline = parsed.headline;
+  if (parsed.summary && parsed.summary.length >= 20) next.summary = parsed.summary;
+  if (parsed.jobTitle && roleWordRx.test(parsed.jobTitle)) next.jobTitle = parsed.jobTitle;
+  if (parsed.jobType) next.jobType = parsed.jobType;
+  if (parsed.remotePreference) next.remotePreference = parsed.remotePreference;
+  if (parsed.availability) next.availability = parsed.availability;
+
+  if (parsed.linkedin && /linkedin\.com/i.test(parsed.linkedin)) next.linkedin = parsed.linkedin;
+  if (parsed.github && /github\.com/i.test(parsed.github)) next.github = parsed.github;
+  if (parsed.portfolio && !/linkedin\.com|github\.com/i.test(parsed.portfolio)) next.portfolio = parsed.portfolio;
+
+  if (parsed.skills?.length) next.skills = parsed.skills;
+  if (parsed.languages?.length) next.languages = parsed.languages;
+  if (parsed.certifications?.length) next.certifications = parsed.certifications;
+  if (parsed.experience?.length) next.experience = parsed.experience;
+  if (parsed.education?.length) next.education = parsed.education;
+
+  return next;
+};
+
+const sectionPatterns = {
+  summary: [/^summary$/i, /^profile$/i, /^objective$/i],
+  experience: [/^experience$/i, /^work experience$/i, /^professional experience$/i],
+  education: [/^education$/i, /^academic background$/i],
+  skills: [/^skills?$/i, /^technical skills?$/i, /^tech stack$/i],
+  languages: [/^languages?$/i],
+  certifications: [/^certifications?$/i, /^licenses?$/i],
+};
+
+const findSectionIndex = (lines, patterns) => lines.findIndex((line) => patterns.some((rx) => rx.test(line)));
+
+const collectSectionLines = (lines, startIndex) => {
+  if (startIndex < 0) return [];
+  const collected = [];
+  for (let i = startIndex + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    const isNextHeader = Object.values(sectionPatterns).some((patterns) => patterns.some((rx) => rx.test(line)));
+    if (isNextHeader) break;
+    if (line) collected.push(line);
+    if (collected.length >= 60) break;
+  }
+  return collected;
+};
+
+const extractResumeData = (rawText, fallbackName = "", fallbackEmail = "") => {
+  const text = String(rawText || "").replace(/\r/g, "\n");
+  const lines = text
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const lower = text.toLowerCase();
+
+  const emailMatch = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  const phoneMatch = text.match(/(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{2,4}\)?[\s-]?)?\d{3,5}[\s-]?\d{4,6}/);
+  const linkedInMatch = text.match(/(?:https?:\/\/)?(?:www\.)?linkedin\.com\/[\w\-./?=&%]+/i);
+  const githubMatch = text.match(/(?:https?:\/\/)?(?:www\.)?github\.com\/[\w\-./?=&%]+/i);
+  const allUrls = Array.from(text.matchAll(/https?:\/\/[^\s)\]]+/gi)).map((m) => m[0]);
+
+  const topSlice = lines.slice(0, 12);
+  const fullName = topSlice.find((line) => isLikelyName(line)) || fallbackName;
+
+  const locationLine =
+    topSlice.find(
+      (line) =>
+        /(,\s*[A-Za-z]{2,}|india|usa|united states|remote|bengaluru|bangalore|hyderabad|pune|mumbai|delhi|gurugram|chennai)/i.test(line) &&
+        !line.includes("@")
+    ) || "";
+
+  const roleLine = topSlice.find((line) => roleWordRx.test(line) && !looksLikeContactNoise(line)) || "";
+
+  const summaryIdx = findSectionIndex(lines, sectionPatterns.summary);
+  const summaryLines = collectSectionLines(lines, summaryIdx);
+  const summary = summaryLines.length
+    ? summaryLines.slice(0, 3).join(" ").slice(0, 550)
+    : lines.find((line) => line.length > 60 && line.length < 260 && !looksLikeContactNoise(line)) || "";
+
+  const splitTokens = (values = []) =>
+    values
+      .join(",")
+      .split(/[,|•/]/)
+      .map((v) => v.trim())
+      .filter((v) => v.length > 1 && v.length < 55 && !/^[-:]+$/.test(v));
+
+  const skillKeywords = [
+    "javascript", "typescript", "react", "node", "node.js", "python", "java", "c++", "c", "go", "rust",
+    "sql", "mongodb", "postgresql", "mysql", "aws", "docker", "kubernetes", "html", "css", "tailwind",
+    "git", "github", "redux", "next.js", "express", "spring", "django", "flask", "machine learning",
+  ];
+
+  const skillsFromKeywords = skillKeywords
+    .filter((keyword) => lower.includes(keyword))
+    .map((keyword) => {
+      if (keyword === "node.js") return "Node.js";
+      if (keyword === "next.js") return "Next.js";
+      return keyword
+        .split(" ")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+    });
+
+  const skillsSection = collectSectionLines(lines, findSectionIndex(lines, sectionPatterns.skills));
+  const languageSection = collectSectionLines(lines, findSectionIndex(lines, sectionPatterns.languages));
+  const certSection = collectSectionLines(lines, findSectionIndex(lines, sectionPatterns.certifications));
+
+  const languageHints = ["english", "hindi", "french", "german", "spanish", "marathi", "tamil", "telugu", "kannada", "malayalam"];
+  const languagesFromText = languageHints.filter((lng) => lower.includes(lng)).map((lng) => toTitleCase(lng));
+
+  const skills = uniq([...splitTokens(skillsSection), ...skillsFromKeywords]).slice(0, 30);
+  const languages = uniq([...splitTokens(languageSection), ...languagesFromText]).slice(0, 12);
+  const certifications = uniq(splitTokens(certSection)).slice(0, 16);
+
+  const expLines = collectSectionLines(lines, findSectionIndex(lines, sectionPatterns.experience));
+  const experience = parseExperienceEntries(expLines);
+
+  const eduLines = collectSectionLines(lines, findSectionIndex(lines, sectionPatterns.education));
+  const education = parseEducationEntries(eduLines);
+
+  const portfolio = allUrls.find((url) => !/linkedin\.com|github\.com/i.test(url)) || "";
+
+  return {
+    fullName: toTitleCase(fullName || ""),
+    email: emailMatch?.[0] || fallbackEmail || "",
+    phone: phoneMatch?.[0] || "",
+    location: locationLine,
+    headline: roleLine,
+    summary,
+    linkedin: safeUrl(linkedInMatch?.[0] || ""),
+    github: safeUrl(githubMatch?.[0] || ""),
+    portfolio: safeUrl(portfolio),
+    jobTitle: roleLine,
+    jobType: /internship|intern\b/i.test(lower) ? "Internship" : /part[- ]?time/i.test(lower) ? "Part-time" : /full[- ]?time/i.test(lower) ? "Full-time" : "",
+    remotePreference: /hybrid/i.test(lower) ? "Hybrid" : /remote/i.test(lower) ? "Remote" : /on[- ]?site|onsite/i.test(lower) ? "On-site" : "",
+    availability: /immediate/i.test(lower) ? "Immediate" : "",
+    skills,
+    languages,
+    certifications,
+    experience,
+    education,
+  };
+};
+
+const extractTextFromPdf = async (file) => {
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+
+  const pages = [];
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
+    const page = await pdf.getPage(pageNum);
+    const textContent = await page.getTextContent();
+    const chunks = [];
+    textContent.items.forEach((item) => {
+      if (!item || typeof item.str !== "string") return;
+      const token = item.str.trim();
+      if (token) chunks.push(token);
+      if (item.hasEOL) chunks.push("\n");
+    });
+
+    const pageText = chunks
+      .join(" ")
+      .replace(/\s*\n\s*/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    if (pageText) pages.push(pageText);
+  }
+
+  return pages.join("\n");
+};
+
+const extractTextFromDocx = async (file) => {
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return result?.value || "";
+};
+
+const extractTextFromResumeFile = async (file) => {
+  const name = (file?.name || "").toLowerCase();
+  const type = (file?.type || "").toLowerCase();
+
+  if (name.endsWith(".pdf") || type.includes("pdf")) {
+    return extractTextFromPdf(file);
+  }
+
+  if (
+    name.endsWith(".docx") ||
+    type.includes("wordprocessingml") ||
+    type.includes("officedocument.wordprocessingml")
+  ) {
+    return extractTextFromDocx(file);
+  }
+
+  return file.text();
+};
 
 
 function TagInput({tags,setTags,placeholder}){
@@ -36,6 +489,8 @@ function ResumePage({user,results}){
   const [parsing,setParsing]=useState(false);
   const [parseSuccess,setParseSuccess]=useState(false);
   const [dragOver,setDragOver]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [saveMessage,setSaveMessage]=useState("");
   const {isMobile}=useBreakpoint();
   const fileRef=useRef();
   const latest=results.length?results[results.length-1]:null;
@@ -51,24 +506,59 @@ function ResumePage({user,results}){
     if(!f)return;
     setFile(f);setParsing(true);setParseSuccess(false);
     try{
-      const text=await f.text();
-      const resp=await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,
-          messages:[{role:"user",content:`Extract info from this resume as JSON only (no markdown): {"fullName","email","phone","location","headline","summary","jobTitle","skills":[],"languages":[],"certifications":[],"experience":[{"title","company","location","from","to","description"}],"education":[{"degree","institution","field","from","to","gpa"}]}\n\nResume:\n${text.slice(0,3000)}`}]})
-      });
-      const data=await resp.json();
-      const raw=data.content?.[0]?.text||"{}";
-      const clean=raw.replace(/```json|```/g,"").trim();
-      const parsed=JSON.parse(clean);
-      setProfile(p=>({...p,...parsed,skills:parsed.skills||p.skills,languages:parsed.languages||p.languages,certifications:parsed.certifications||p.certifications,experience:parsed.experience||p.experience,education:parsed.education||p.education}));
+      const text=await extractTextFromResumeFile(f);
+      if(!text || !text.trim()){
+        throw new Error("Could not extract text from the uploaded file.");
+      }
+      const parsed=extractResumeData(text,user?.name||"",user?.email||"");
+      setProfile(p=>mergeParsedProfile(p,parsed));
       setParseSuccess(true);
     }catch{
-      // Demo fallback
-      setProfile(p=>({...p,headline:"Software Developer",skills:["JavaScript","React","Node.js","Python"],summary:"Experienced software developer with strong problem-solving skills."}));
+      setProfile(p=>({
+        ...p,
+        fullName: p.fullName || user?.name || "",
+        email: p.email || user?.email || "",
+        headline: p.headline || "Software Developer",
+        skills: p.skills?.length ? p.skills : ["JavaScript","React","Node.js","Python"],
+        summary: p.summary || "Could not auto-parse this file. Please edit a few fields manually.",
+      }));
       setParseSuccess(true);
     }
     setParsing(false);
+  };
+
+  useEffect(()=>{
+    let mounted=true;
+    const hydrate=async()=>{
+      try{
+        const saved=await loadResumeProfile();
+        if(!mounted || !saved || typeof saved!=="object") return;
+        setProfile(p=>({
+          ...EMPTY_PROFILE,
+          ...p,
+          ...saved,
+        }));
+      }catch{
+        // Silent fail keeps page usable even if backend is unavailable.
+      }
+    };
+    hydrate();
+    return ()=>{mounted=false;};
+  },[user?.id]);
+
+  const handleSave=async()=>{
+    setSaving(true);
+    setSaveMessage("");
+    try{
+      await saveResumeProfile({
+        profile,
+        resumeFileName:file?.name||"",
+      });
+      setSaveMessage("Profile saved to backend successfully.");
+    }catch(err){
+      setSaveMessage(err?.message || "Failed to save profile.");
+    }
+    setSaving(false);
   };
 
   const sectionTabs=[
@@ -280,8 +770,9 @@ function ResumePage({user,results}){
               </Card>
             )}
 
-            <div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}>
-              <button className="sl-btn-hover" style={{padding:"11px 28px",background:C.indigo,color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer"}}>💾 Save Profile</button>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12,gap:10,flexWrap:"wrap"}}>
+              <span style={{fontSize:12,color:saveMessage.includes("success")?C.green:C.muted}}>{saveMessage}</span>
+              <button onClick={handleSave} disabled={saving} className="sl-btn-hover" style={{padding:"11px 28px",background:saving?C.border:C.indigo,color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:saving?"not-allowed":"pointer"}}>{saving?"Saving...":"💾 Save Profile"}</button>
             </div>
           </div>
 
