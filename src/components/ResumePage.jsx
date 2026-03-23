@@ -88,6 +88,14 @@ const normalizeTextValue = (value = "") =>
     .replace(/^[,;|\-\s]+|[,;|\-\s]+$/g, "")
     .trim();
 
+const placeholderValueRx = /^(n\/?a|na|none|null|nil|not\s+available|not\s+provided|unknown|tbd|--|-)$/i;
+
+const toCleanTextOrEmpty = (value = "") => {
+  const normalized = normalizeTextValue(value);
+  if (!normalized || placeholderValueRx.test(normalized)) return "";
+  return normalized;
+};
+
 const dedupeByKey = (arr = [], keyFn = (v) => v) => {
   const seen = new Set();
   const out = [];
@@ -110,7 +118,7 @@ const parseExperienceCompositeLine = (line = "") => {
   const companyPart = parts.find((p) => p !== titlePart && looksLikeCompany(p)) || "";
   const locationPart = parts.find((p) => looksLikeLocation(p)) || "";
 
-  if (!titlePart && !companyPart) return null;
+  if (!titlePart || !companyPart) return null;
   return {
     title: normalizeTextValue(titlePart),
     company: normalizeTextValue(companyPart),
@@ -172,7 +180,8 @@ const parseExperienceEntries = (lines = []) => {
 
     const description = descLines.join(" ").slice(0, 380);
 
-    if (!title && !company) continue;
+    if (!title || !company) continue;
+    if (title.toLowerCase() === company.toLowerCase()) continue;
 
     entries.push({
       title: normalizeTextValue(title),
@@ -197,9 +206,11 @@ const parseExperienceEntries = (lines = []) => {
       const dateSource = [line, next, n2].find((v) => dateRangeRx.test(v)) || "";
       const { from, to } = splitDates(dateSource);
 
+      if (!looksLikeCompany(next)) continue;
+
       entries.push({
         title: normalizeTextValue(line),
-        company: normalizeTextValue(looksLikeCompany(next) ? next : ""),
+        company: normalizeTextValue(next),
         location: normalizeTextValue(looksLikeLocation(next) ? next : looksLikeLocation(n2) ? n2 : ""),
         from: normalizeTextValue(from),
         to: normalizeTextValue(to),
@@ -211,7 +222,7 @@ const parseExperienceEntries = (lines = []) => {
   }
 
   return dedupeByKey(entries, (e) => `${(e.title || "").toLowerCase()}|${(e.company || "").toLowerCase()}|${e.from}|${e.to}`)
-    .filter((e) => e.title || e.company)
+    .filter((e) => e.title && e.company)
     .slice(0, 4);
 };
 
@@ -240,7 +251,7 @@ const parseEducationEntries = (lines = []) => {
     const fromYear = from || (dateLine.match(/\b(19|20)\d{2}\b/)?.[0] || "");
     const toYear = to || (dateLine.match(/\b(19|20)\d{2}\b/g)?.[1] || "");
 
-    if (!degree && !institution) continue;
+    if (!degree || !institution) continue;
 
     entries.push({
       degree: normalizeTextValue(degree),
@@ -254,7 +265,7 @@ const parseEducationEntries = (lines = []) => {
     if (entries.length >= 3) break;
   }
   return dedupeByKey(entries, (e) => `${(e.degree || "").toLowerCase()}|${(e.institution || "").toLowerCase()}|${e.from}|${e.to}`)
-    .filter((e) => e.degree || e.institution)
+    .filter((e) => e.degree && e.institution)
     .slice(0, 4);
 };
 
@@ -338,9 +349,7 @@ const extractResumeData = (rawText, fallbackName = "", fallbackEmail = "") => {
 
   const summaryIdx = findSectionIndex(lines, sectionPatterns.summary);
   const summaryLines = collectSectionLines(lines, summaryIdx);
-  const summary = summaryLines.length
-    ? summaryLines.slice(0, 3).join(" ").slice(0, 550)
-    : lines.find((line) => line.length > 60 && line.length < 260 && !looksLikeContactNoise(line)) || "";
+  const summary = summaryLines.length ? summaryLines.slice(0, 3).join(" ").slice(0, 550) : "";
 
   const splitTokens = (values = []) =>
     values
@@ -370,12 +379,10 @@ const extractResumeData = (rawText, fallbackName = "", fallbackEmail = "") => {
   const languageSection = collectSectionLines(lines, findSectionIndex(lines, sectionPatterns.languages));
   const certSection = collectSectionLines(lines, findSectionIndex(lines, sectionPatterns.certifications));
 
-  const languageHints = ["english", "hindi", "french", "german", "spanish", "marathi", "tamil", "telugu", "kannada", "malayalam"];
-  const languagesFromText = languageHints.filter((lng) => lower.includes(lng)).map((lng) => toTitleCase(lng));
-
-  const skills = uniq([...splitTokens(skillsSection), ...skillsFromKeywords]).slice(0, 30);
-  const languages = uniq([...splitTokens(languageSection), ...languagesFromText]).slice(0, 12);
-  const certifications = uniq(splitTokens(certSection)).slice(0, 16);
+  // Skills can be reliably inferred from a curated keyword list even when no explicit skills section exists.
+  const skills = uniq(skillsSection.length ? [...splitTokens(skillsSection), ...skillsFromKeywords] : skillsFromKeywords).slice(0, 30);
+  const languages = uniq(languageSection.length ? splitTokens(languageSection) : []).slice(0, 12);
+  const certifications = uniq(certSection.length ? splitTokens(certSection) : []).slice(0, 16);
 
   const expLines = collectSectionLines(lines, findSectionIndex(lines, sectionPatterns.experience));
   const experience = parseExperienceEntries(expLines);
@@ -383,19 +390,21 @@ const extractResumeData = (rawText, fallbackName = "", fallbackEmail = "") => {
   const eduLines = collectSectionLines(lines, findSectionIndex(lines, sectionPatterns.education));
   const education = parseEducationEntries(eduLines);
 
-  const portfolio = allUrls.find((url) => !/linkedin\.com|github\.com/i.test(url)) || "";
+  const topText = topSlice.join(" ");
+  const topUrls = Array.from(topText.matchAll(/https?:\/\/[^\s)\]]+/gi)).map((m) => m[0]);
+  const portfolio = topUrls.find((url) => !/linkedin\.com|github\.com/i.test(url)) || "";
 
   return {
-    fullName: toTitleCase(fullName || ""),
-    email: emailMatch?.[0] || fallbackEmail || "",
-    phone: phoneMatch?.[0] || "",
-    location: locationLine,
-    headline: roleLine,
-    summary,
+    fullName: toTitleCase(toCleanTextOrEmpty(fullName || "")),
+    email: toCleanTextOrEmpty(emailMatch?.[0] || fallbackEmail || ""),
+    phone: toCleanTextOrEmpty(phoneMatch?.[0] || ""),
+    location: toCleanTextOrEmpty(locationLine),
+    headline: toCleanTextOrEmpty(roleLine),
+    summary: toCleanTextOrEmpty(summary),
     linkedin: safeUrl(linkedInMatch?.[0] || ""),
     github: safeUrl(githubMatch?.[0] || ""),
     portfolio: safeUrl(portfolio),
-    jobTitle: roleLine,
+    jobTitle: toCleanTextOrEmpty(roleLine),
     jobType: /internship|intern\b/i.test(lower) ? "Internship" : /part[- ]?time/i.test(lower) ? "Part-time" : /full[- ]?time/i.test(lower) ? "Full-time" : "",
     remotePreference: /hybrid/i.test(lower) ? "Hybrid" : /remote/i.test(lower) ? "Remote" : /on[- ]?site|onsite/i.test(lower) ? "On-site" : "",
     availability: /immediate/i.test(lower) ? "Immediate" : "",
@@ -460,6 +469,18 @@ const extractTextFromResumeFile = async (file) => {
   return file.text();
 };
 
+const extractBase64FromFile = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const base64 = result.includes(",") ? result.split(",").slice(1).join(",") : result;
+      resolve(base64 || "");
+    };
+    reader.onerror = () => reject(new Error("Failed to read resume file."));
+    reader.readAsDataURL(file);
+  });
+
 
 function TagInput({tags,setTags,placeholder}){
   const [val,setVal]=useState("");
@@ -491,9 +512,11 @@ function ResumePage({user,results}){
   const [dragOver,setDragOver]=useState(false);
   const [saving,setSaving]=useState(false);
   const [saveMessage,setSaveMessage]=useState("");
+  const [resumeText,setResumeText]=useState("");
   const {isMobile}=useBreakpoint();
   const fileRef=useRef();
   const latest=results.length?results[results.length-1]:null;
+  const localResumeKey = `skilllens_resume_profile_${user?.id || user?.email || "guest"}`;
 
   const up=fields=>setProfile(p=>({...p,...fields}));
 
@@ -510,17 +533,16 @@ function ResumePage({user,results}){
       if(!text || !text.trim()){
         throw new Error("Could not extract text from the uploaded file.");
       }
+      setResumeText(text);
       const parsed=extractResumeData(text,user?.name||"",user?.email||"");
       setProfile(p=>mergeParsedProfile(p,parsed));
       setParseSuccess(true);
     }catch{
+      setResumeText("");
       setProfile(p=>({
         ...p,
         fullName: p.fullName || user?.name || "",
         email: p.email || user?.email || "",
-        headline: p.headline || "Software Developer",
-        skills: p.skills?.length ? p.skills : ["JavaScript","React","Node.js","Python"],
-        summary: p.summary || "Could not auto-parse this file. Please edit a few fields manually.",
       }));
       setParseSuccess(true);
     }
@@ -539,24 +561,58 @@ function ResumePage({user,results}){
           ...saved,
         }));
       }catch{
-        // Silent fail keeps page usable even if backend is unavailable.
+        // Fallback to local draft if backend persistence is unavailable.
+        try{
+          const localRaw=localStorage.getItem(localResumeKey);
+          if(!mounted || !localRaw) return;
+          const localSaved=JSON.parse(localRaw);
+          if(!localSaved || typeof localSaved!=="object") return;
+          setProfile(p=>({
+            ...EMPTY_PROFILE,
+            ...p,
+            ...localSaved,
+          }));
+        }catch{
+          // Ignore malformed local cache.
+        }
       }
     };
     hydrate();
     return ()=>{mounted=false;};
-  },[user?.id]);
+  },[user?.id, user?.email, localResumeKey]);
 
   const handleSave=async()=>{
     setSaving(true);
     setSaveMessage("");
     try{
+      let resumeFileData="";
+      let resumeFileMime="";
+      let resumeFileSize=0;
+      if(file){
+        resumeFileData=await extractBase64FromFile(file);
+        resumeFileMime=String(file.type||"").slice(0,120);
+        resumeFileSize=Number(file.size||0);
+      }
+
       await saveResumeProfile({
         profile,
+        resumeText,
         resumeFileName:file?.name||"",
+        resumeFileData,
+        resumeFileMime,
+        resumeFileSize,
       });
+      localStorage.setItem(localResumeKey, JSON.stringify(profile));
       setSaveMessage("Profile saved to backend successfully.");
     }catch(err){
-      setSaveMessage(err?.message || "Failed to save profile.");
+      const message=String(err?.message||"");
+      const missingTable=/resume_profiles|public\.resume_profiles|schema cache|table not found/i.test(message);
+      if(missingTable){
+        localStorage.setItem(localResumeKey, JSON.stringify(profile));
+        setSaveMessage("Backend resume table is missing. Profile saved locally in this browser. Run supabase/schema.sql in Supabase SQL Editor to enable cloud save.");
+      }else{
+        setSaveMessage(message || "Failed to save profile.");
+      }
     }
     setSaving(false);
   };

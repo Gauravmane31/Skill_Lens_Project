@@ -3,6 +3,10 @@ import express from "express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { createClient } from "@supabase/supabase-js";
+import { createServer } from "http";
+import { Server } from "socket.io";
+import { LANGUAGES, SUPPORTED_LANGUAGES, executeCode } from "./utils/codeExecution.js";
+import { checkPlagiarism } from "./utils/plagiarism.js";
 
 // ── Validate env ──────────────────────────────────────────────────────────────
 const required = ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
@@ -28,16 +32,28 @@ const supabaseAdmin = createClient(
 
 // ── Express app ───────────────────────────────────────────────────────────────
 const app = express();
+const server = createServer(app);
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
-app.use(express.json());
+// ── Socket.IO (optional real-time output streaming) ──────────────────────────
+export const io = new Server(server, {
+  cors: { origin: FRONTEND_URL || "*" },
+});
+
+io.on("connection", (socket) => {
+  console.log("Client connected:", socket.id);
+  socket.on("disconnect", () => console.log("Client left:", socket.id));
+});
+
 app.use(
   cors({
     origin: FRONTEND_URL,
     credentials: true,
   })
 );
+// Resume file payloads are sent as base64 JSON; raise limit beyond Express default (100kb).
+app.use(express.json({ limit: "12mb" }));
 
 // Rate limiting — auth routes only
 const authLimiter = rateLimit({
@@ -51,6 +67,15 @@ const profileLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
   message: { error: "Too many profile updates. Please try again in a minute." },
+});
+
+// Rate limiting for code execution — 30 runs / 60s per IP
+const codeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: "Too many requests — slow down!" },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // ── Helper ────────────────────────────────────────────────────────────────────
@@ -86,9 +111,43 @@ async function requireUser(req, res, next) {
   }
 }
 
+// ── PLAGIARISM DETECTION UTILITIES ───────────────────────────────────────────
+// [Moved to utils/plagiarism.js - exported as checkPlagiarism]
+
+// ── JUDGE0 CODE EXECUTION UTILITIES ──────────────────────────────────────────
+// [Moved to utils/codeExecution.js - exported as executeCode, LANGUAGES, SUPPORTED_LANGUAGES]
+
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// ── GET SUPPORTED LANGUAGES ──────────────────────────────────────────────────
+// GET /api/languages
+app.get("/api/languages", (_req, res) => {
+  res.json({ languages: LANGUAGES });
+});
+
+// ── CODE EXECUTION — Judge0 ─────────────────────────────────────────────────
+// POST /api/run
+// Body: { language, code, stdin? }
+app.post("/api/run", codeLimiter, async (req, res) => {
+  const { language, code, stdin = "" } = req.body;
+
+  if (!language || !SUPPORTED_LANGUAGES.includes(language)) {
+    return res.status(400).json({
+      error: `Unsupported language. Choose from: ${SUPPORTED_LANGUAGES.join(", ")}`,
+    });
+  }
+  if (!code || typeof code !== "string") {
+    return res.status(400).json({ error: "code field is required" });
+  }
+  if (code.length > 50_000) {
+    return res.status(400).json({ error: "Code too large (max 50,000 chars)" });
+  }
+
+  const result = await executeCode(language, code, stdin);
+  return res.json(result);
 });
 
 // ── SIGN UP (email + password) ────────────────────────────────────────────────
@@ -268,7 +327,7 @@ app.post("/api/auth/reset-password", authLimiter, async (req, res) => {
 app.get("/api/profile/resume", requireUser, async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from("resume_profiles")
-    .select("profile, resume_text, resume_file_name, updated_at")
+    .select("profile, resume_text, resume_file_name, resume_file_data, resume_file_mime, resume_file_size, updated_at")
     .eq("user_id", req.user.id)
     .maybeSingle();
 
@@ -287,6 +346,9 @@ app.get("/api/profile/resume", requireUser, async (req, res) => {
     profile: data?.profile || null,
     resumeText: data?.resume_text || "",
     resumeFileName: data?.resume_file_name || "",
+    resumeFileData: data?.resume_file_data || "",
+    resumeFileMime: data?.resume_file_mime || "",
+    resumeFileSize: Number(data?.resume_file_size || 0),
     updatedAt: data?.updated_at || null,
   });
 });
@@ -294,7 +356,14 @@ app.get("/api/profile/resume", requireUser, async (req, res) => {
 // PUT /api/profile/resume
 // Body: { profile: object, resumeText?: string, resumeFileName?: string }
 app.put("/api/profile/resume", requireUser, profileLimiter, async (req, res) => {
-  const { profile, resumeText = "", resumeFileName = "" } = req.body || {};
+  const {
+    profile,
+    resumeText = "",
+    resumeFileName = "",
+    resumeFileData = "",
+    resumeFileMime = "",
+    resumeFileSize = 0,
+  } = req.body || {};
   if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
     return res.status(400).json({ error: "profile object is required." });
   }
@@ -304,6 +373,10 @@ app.put("/api/profile/resume", requireUser, profileLimiter, async (req, res) => 
     profile,
     resume_text: String(resumeText || "").slice(0, 200000),
     resume_file_name: String(resumeFileName || "").slice(0, 300),
+    // Base64 payload capped to keep row size bounded while supporting common resume sizes.
+    resume_file_data: String(resumeFileData || "").slice(0, 8000000),
+    resume_file_mime: String(resumeFileMime || "").slice(0, 120),
+    resume_file_size: Number.isFinite(Number(resumeFileSize)) ? Math.max(0, Number(resumeFileSize)) : 0,
     updated_at: new Date().toISOString(),
   };
 
@@ -324,8 +397,8 @@ app.put("/api/profile/resume", requireUser, profileLimiter, async (req, res) => 
 });
 
 // ── Start server ──────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`\n🧠 SkillLens Backend running on http://localhost:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`\n🧠 SkillLens Unified Backend running on http://localhost:${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/api/health\n`);
   console.log("   Auth endpoints:");
   console.log("   POST /api/auth/signup");
@@ -339,4 +412,7 @@ app.listen(PORT, () => {
   console.log("   Resume profile endpoints:");
   console.log("   GET  /api/profile/resume");
   console.log("   PUT  /api/profile/resume\n");
+  console.log("   Code execution endpoints:");
+  console.log("   GET  /api/languages");
+  console.log("   POST /api/run\n");
 });

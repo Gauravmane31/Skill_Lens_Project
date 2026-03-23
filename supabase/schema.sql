@@ -44,9 +44,22 @@ create table if not exists public.resume_profiles (
   profile jsonb not null default '{}'::jsonb,
   resume_text text not null default '',
   resume_file_name text not null default '',
+  resume_file_data text not null default '',
+  resume_file_mime text not null default '',
+  resume_file_size integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Ensure newly added resume file columns exist for already-provisioned databases.
+alter table if exists public.resume_profiles
+  add column if not exists resume_file_data text not null default '';
+
+alter table if exists public.resume_profiles
+  add column if not exists resume_file_mime text not null default '';
+
+alter table if exists public.resume_profiles
+  add column if not exists resume_file_size integer not null default 0;
 
 create index if not exists idx_submissions_user_created_at
   on public.submissions(user_id, created_at desc);

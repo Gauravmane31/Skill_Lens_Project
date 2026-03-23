@@ -450,9 +450,23 @@ export const loadResumeProfile = async () => {
   return payload?.profile || null;
 };
 
-export const saveResumeProfile = async ({ profile, resumeText = '', resumeFileName = '' }) => {
+export const saveResumeProfile = async ({
+  profile,
+  resumeText = '',
+  resumeFileName = '',
+  resumeFileData = '',
+  resumeFileMime = '',
+  resumeFileSize = 0,
+}) => {
   return backendRequest('/api/profile/resume', {
     method: 'PUT',
-    body: JSON.stringify({ profile, resumeText, resumeFileName }),
+    body: JSON.stringify({
+      profile,
+      resumeText,
+      resumeFileName,
+      resumeFileData,
+      resumeFileMime,
+      resumeFileSize,
+    }),
   });
 };
