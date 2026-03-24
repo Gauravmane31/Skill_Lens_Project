@@ -47,11 +47,8 @@ function CertificatePage({results,user}){
                   <div style={{position:"relative"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24,paddingBottom:16,borderBottom:`1px solid ${C.border}`}}>
                       <div style={{display:"flex",alignItems:"center",gap:9}}>
-                        {/* <div style={{width:36,height:36,background:C.indigoLight,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:19}}>🧠</div>
-                        <div><div style={{fontWeight:900,fontSize:14}}>Skill<span style={{color:C.indigo}}>Lens</span></div><div style={{fontSize:10,color:C.muted}}>Proof-of-Work Platform</div></div> */}
                         <img src="MainLogo-removebg-preview.png" alt="logo" style={{ width: 100, height: 40, objectFit:"contain" }} />
                         <div style={{fontSize:10,color:C.muted}}>Proof-of-Work Platform</div>
-
                       </div>
                       <div style={{display:"flex",gap:5}}><Badge label="VERIFIED ✓" color={C.green}/><Badge label="AUTHENTIC" color={C.indigo}/></div>
                     </div>

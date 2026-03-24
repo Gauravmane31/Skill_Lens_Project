@@ -37,7 +37,15 @@ const server = createServer(app);
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
-const ALLOWED_ORIGINS = FRONTEND_URL
+const ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  ...FRONTEND_URL.split(",").map((origin) => origin.trim()),
+]
+  .filter(Boolean)
+  .filter((origin, index, arr) => arr.indexOf(origin) === index);
+
+const SOCKET_ALLOWED_ORIGINS = FRONTEND_URL
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -52,7 +60,9 @@ const asyncRoute = (handler) => (req, res, next) =>
 
 // ── Socket.IO (optional real-time output streaming) ──────────────────────────
 export const io = new Server(server, {
-  cors: { origin: FRONTEND_URL || "*" },
+  cors: {
+    origin: SOCKET_ALLOWED_ORIGINS.length ? SOCKET_ALLOWED_ORIGINS : ALLOWED_ORIGINS,
+  },
 });
 
 io.on("connection", (socket) => {
@@ -606,7 +616,25 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
     },
   });
 
-  if (error) return res.status(400).json({ error: error.message });
+  if (error) {
+    const message = String(error.message || "Authentication failed.");
+
+    if (/email rate limit exceeded/i.test(message)) {
+      return res.status(429).json({
+        error: "Email send limit reached. Please wait a few minutes, then try again or log in if your account already exists.",
+        code: "EMAIL_RATE_LIMIT_EXCEEDED",
+      });
+    }
+
+    if (/user already registered/i.test(message)) {
+      return res.status(409).json({
+        error: "This email is already registered. Please log in instead.",
+        code: "USER_ALREADY_REGISTERED",
+      });
+    }
+
+    return res.status(400).json({ error: message });
+  }
 
   // Supabase sends a confirmation email by default.
   // If email confirmation is disabled in your Supabase project,
@@ -641,8 +669,30 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
   });
 
   if (error) {
-    // Supabase returns "Invalid login credentials" for wrong email/password
-    return res.status(401).json({ error: "Invalid email or password." });
+    const message = String(error.message || "Authentication failed.");
+
+    if (/email not confirmed/i.test(message)) {
+      return res.status(403).json({
+        error: "Email is not verified yet. Please verify your email first, then log in.",
+        code: "EMAIL_NOT_CONFIRMED",
+      });
+    }
+
+    if (/invalid login credentials/i.test(message)) {
+      return res.status(401).json({
+        error: "Invalid email or password.",
+        code: "INVALID_CREDENTIALS",
+      });
+    }
+
+    if (/too many requests|rate limit/i.test(message)) {
+      return res.status(429).json({
+        error: "Too many login attempts. Please wait a few minutes and try again.",
+        code: "AUTH_RATE_LIMITED",
+      });
+    }
+
+    return res.status(400).json({ error: message });
   }
 
   return res.json({

@@ -201,6 +201,55 @@ const backendRequest = async (path, options = {}) => {
   return payload;
 };
 
+const authRequest = async (path, body) => {
+  const response = await fetch(`${BACKEND_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body || {}),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.error || `Authentication failed with status ${response.status}`);
+  }
+
+  return payload;
+};
+
+export const signupWithEmail = async ({ name, email, password }) => {
+  const payload = await authRequest('/api/auth/signup', { name, email, password });
+
+  if (payload?.accessToken && payload?.refreshToken) {
+    const { error } = await supabase.auth.setSession({
+      access_token: payload.accessToken,
+      refresh_token: payload.refreshToken,
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Failed to create session after sign-up.');
+    }
+  }
+
+  return payload;
+};
+
+export const loginWithEmail = async ({ email, password }) => {
+  const payload = await authRequest('/api/auth/login', { email, password });
+
+  const { error } = await supabase.auth.setSession({
+    access_token: payload.accessToken,
+    refresh_token: payload.refreshToken,
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to create session after login.');
+  }
+
+  return payload;
+};
+
 const ensureProfile = async (user, overrides = {}) => {
   const name = overrides.name || user.user_metadata?.full_name || user.email;
   const avatar = overrides.avatar || user.user_metadata?.avatar_url || (name ? name.charAt(0).toUpperCase() : 'U');

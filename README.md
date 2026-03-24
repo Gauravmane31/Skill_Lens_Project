@@ -24,18 +24,6 @@
 
 ### What You Need First
 
-**⚠️ CRITICAL: Enable Email Authentication**
-
-Your Supabase project has Email auth disabled by default. Users cannot signup/login without this.
-
-```
-1. Go to: https://app.supabase.com/project/ihzgdbcayhwujtjdcjmn/auth/providers
-2. Find "Email / Password" provider
-3. Toggle: OFF → ON (turns GREEN)
-4. Click SAVE
-5. Wait 10-15 seconds
-```
-
 ### Start Services
 
 ```powershell
@@ -85,11 +73,11 @@ Invoke-WebRequest http://localhost:4000/api/languages -UseBasicParsing
 │           SkillLens Frontend (React + Vite)             │
 │              http://localhost:3000                      │
 │                                                         │
-│  • Signup/Login (Email Auth)                           │
-│  • Challenges Page (Code Editor)                       │
-│  • Dashboard (User Statistics)                         │
-│  • Leaderboard (Real-time Rankings)                    │
-│  • Code Submission & Execution                         │
+│  • Signup/Login (Email Auth)                            │
+│  • Challenges Page (Code Editor)                        │
+│  • Dashboard (User Statistics)                          │
+│  • Leaderboard (Real-time Rankings)                     │
+│  • Code Submission & Execution                          │
 └──────────────────────┬──────────────────────────────────┘
                        │
         ┌──────────────┼──────────────┐
