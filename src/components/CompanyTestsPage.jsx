@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { C } from "../data/constants.js";
+import { C } from "../data/constants/constants.js";
 import useBreakpoint from "./shared/useBreakpoint.js";
 import { PageHero, Card, SectionHeader, Badge, ProgressBar } from "./shared/Atoms.jsx";
 import { fetchMyAssignedCompanyTests, fetchMyCompanyTestProgress } from "../utils/api.js";

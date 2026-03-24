@@ -39,12 +39,24 @@ export default function SkillLens() {
   const handleSubmit=result=>{setResults(r=>[...r,result]);setPage("results");};
   const markNotifsRead=()=>setNotifications(n=>n.map(x=>({...x,read:true})));
 
+  const refreshNotifications = async () => {
+    try {
+      const notifs = await fetchNotifications();
+      if (notifs && notifs.length) setNotifications(notifs);
+    } catch (e) {
+      console.error("Failed to fetch notifications:", e);
+    }
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) handleSupabaseUser(session.user);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) handleSupabaseUser(session.user);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
+        handleSupabaseUser(session.user);
+      }
+      if (event === "SIGNED_OUT") handleLogoutLocal();
     });
     return () => subscription.unsubscribe();
   }, []);

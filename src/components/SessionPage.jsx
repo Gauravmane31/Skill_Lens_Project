@@ -11,7 +11,7 @@ import { submitCode } from "../utils/api.js";
 import { BOILERPLATE } from "../data/constants/boilerplate.js";
 import { C } from "../data/constants/constants.js";
 
-const COMPILER_API = import.meta.env.VITE_COMPILER_API_URL || "http://localhost:4000";
+const COMPILER_API = import.meta.env.VITE_COMPILER_API_URL || "http://localhost:5000";
 
 // ── Session Page ──────────────────────────────────────────────────────────────
 function SessionPage({ challenge, onSubmit, setPage }) {
@@ -90,8 +90,13 @@ function SessionPage({ challenge, onSubmit, setPage }) {
         toast.success("Execution complete");
       }
     } catch (err) {
-      setOutput(`Error: ${err.message}`);
-      toast.error("Could not run code");
+      if (err.message.includes("Network Error") || !err.response) {
+        setOutput("Error: Compiler service is offline (Port 4000). Please start the compiler backend.");
+        toast.error("Compiler service offline");
+      } else {
+        setOutput(`Error: ${err.message}`);
+        toast.error("Could not run code");
+      }
     }
     setRunning(false);
   };

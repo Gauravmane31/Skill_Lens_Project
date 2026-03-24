@@ -1,5 +1,5 @@
 import React from "react";
-import { C } from "../data/constants.js";
+import { C } from "../data/constants/constants.js";
 import useBreakpoint from "./shared/useBreakpoint.js";
 import { Card, PageHero, SectionHeader } from "./shared/Atoms.jsx";
 

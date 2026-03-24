@@ -201,7 +201,7 @@ function JobBoardPage({ results }) {
                   </div>
                 </div>
               </div>
-            )})}
+            ))}
           </div>
 
           {/* Job detail pane */}

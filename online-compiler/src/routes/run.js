@@ -58,10 +58,12 @@ async function submitCode(language, code, stdin) {
 
   if (!res.ok) {
     const text = await res.text();
+    console.error(`Judge0 Submit Error (${res.status}):`, text);
     throw new Error(`Submit failed (${res.status}): ${text}`);
   }
 
   const data = await res.json();
+  console.log("Judge0 Token Created:", data.token);
   if (!data.token) {
     throw new Error(`No token returned: ${JSON.stringify(data)}`);
   }
@@ -75,6 +77,8 @@ async function pollResult(token) {
   });
 
   if (!res.ok) {
+    const text = await res.text();
+    console.error(`Judge0 Poll Error (${res.status}) for token ${token}:`, text);
     throw new Error(`Poll failed (${res.status})`);
   }
   return await res.json();

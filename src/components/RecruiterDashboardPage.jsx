@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { C } from "../data/constants.js";
+import { C } from "../data/constants/constants.js";
 import useBreakpoint from "./shared/useBreakpoint.js";
 import { Card, SectionHeader, PageHero, inputSt, Badge, ProgressBar } from "./shared/Atoms.jsx";
 import {
