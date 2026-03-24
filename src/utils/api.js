@@ -6,6 +6,20 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 const CHALLENGE_BY_ID = new Map(CHALLENGES.map((challenge) => [Number(challenge.id), challenge]));
 const CHALLENGE_BY_TITLE = new Map(CHALLENGES.map((challenge) => [challenge.title, challenge]));
+const LEGACY_CHALLENGE_TITLES = new Set([
+  'Two Sum',
+  'Reverse Linked List',
+  'Binary Search',
+  'Valid Parentheses',
+  'Maximum Subarray',
+  'Climbing Stairs',
+  'Merge Two Sorted Lists',
+  'Best Time to Buy Stock',
+  'Longest Common Prefix',
+  'Number of Islands',
+  '3Sum',
+  'LRU Cache',
+]);
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -21,17 +35,24 @@ const dayDiff = (a, b) => {
 
 const normalizeChallenge = (challenge = {}) => {
   const meta = CHALLENGE_BY_ID.get(Number(challenge.id)) || CHALLENGE_BY_TITLE.get(challenge.title);
-  const domain = challenge.domain || challenge.category || meta?.category || 'General';
+  const hasLegacyTitle = LEGACY_CHALLENGE_TITLES.has(challenge.title);
+  const title = hasLegacyTitle ? (meta?.title || challenge.title) : (challenge.title || meta?.title || 'Untitled Challenge');
+  const description = hasLegacyTitle
+    ? (meta?.description || challenge.description || 'No description available.')
+    : (challenge.description || meta?.description || 'No description available.');
+  const domain = hasLegacyTitle
+    ? (meta?.category || challenge.domain || challenge.category || 'General')
+    : (challenge.domain || challenge.category || meta?.category || 'General');
 
   return {
     ...meta,
     ...challenge,
     id: Number(challenge.id ?? meta?.id),
-    title: challenge.title || meta?.title || 'Untitled Challenge',
-    description: challenge.description || meta?.description || 'No description available.',
+    title,
+    description,
     domain,
     category: domain,
-    difficulty: challenge.difficulty || meta?.difficulty || 'Easy',
+    difficulty: hasLegacyTitle ? (meta?.difficulty || challenge.difficulty || 'Easy') : (challenge.difficulty || meta?.difficulty || 'Easy'),
     xp: Number(challenge.xp ?? meta?.xp ?? 100),
     timeLimit: Number(challenge.timeLimit ?? challenge.time_limit ?? meta?.timeLimit ?? 30),
     starterCode: challenge.starterCode || challenge.starter_code || meta?.starterCode || {},
@@ -156,6 +177,11 @@ const getAccessToken = async () => {
   return session.access_token;
 };
 
+const normalizeRole = (role = '') => {
+  const value = String(role || '').toLowerCase();
+  return value === 'recruiter' ? 'recruiter' : 'student';
+};
+
 const backendRequest = async (path, options = {}) => {
   const token = await getAccessToken();
   const response = await fetch(`${BACKEND_URL}${path}`, {
@@ -178,12 +204,14 @@ const backendRequest = async (path, options = {}) => {
 const ensureProfile = async (user, overrides = {}) => {
   const name = overrides.name || user.user_metadata?.full_name || user.email;
   const avatar = overrides.avatar || user.user_metadata?.avatar_url || (name ? name.charAt(0).toUpperCase() : 'U');
+  const role = normalizeRole(overrides.role || user.user_metadata?.role || 'student');
 
   const upsertPayload = {
     id: user.id,
     email: overrides.email || user.email,
     name,
     avatar,
+    role,
     updated_at: new Date().toISOString(),
   };
 
@@ -248,9 +276,17 @@ export const fetchProblemById = async (id) => {
   return normalizeChallenge(fallback || {});
 };
 
-export const syncUserProfile = async (_userId, _email, name = '', avatar = '') => {
+export const syncUserProfile = async (_userId, _email, name = '', avatar = '', role = 'student') => {
   const user = await ensureAuthenticatedUser();
-  return ensureProfile(user, { name, avatar });
+  return ensureProfile(user, { name, avatar, role });
+};
+
+export const setUserRole = async (role) => {
+  const payload = await backendRequest('/api/profile/role', {
+    method: 'PUT',
+    body: JSON.stringify({ role: normalizeRole(role) }),
+  });
+  return payload?.role || 'student';
 };
 
 export const submitCode = async (payload) => {
@@ -469,4 +505,121 @@ export const saveResumeProfile = async ({
       resumeFileSize,
     }),
   });
+};
+
+export const fetchNotifications = async () => {
+  const payload = await backendRequest('/api/notifications', { method: 'GET' });
+  return Array.isArray(payload?.notifications) ? payload.notifications : [];
+};
+
+export const markNotificationsRead = async (ids = []) => {
+  await backendRequest('/api/notifications/read', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+  return true;
+};
+
+export const fetchJobs = async () => {
+  const payload = await backendRequest('/api/jobs', { method: 'GET' });
+  return Array.isArray(payload?.jobs) ? payload.jobs : [];
+};
+
+export const createJob = async (jobPayload) => {
+  return backendRequest('/api/jobs', {
+    method: 'POST',
+    body: JSON.stringify(jobPayload || {}),
+  });
+};
+
+export const fetchJobRecommendations = async () => {
+  const payload = await backendRequest('/api/jobs/recommendations/me', { method: 'GET' });
+  return Array.isArray(payload?.recommendations) ? payload.recommendations : [];
+};
+
+export const fetchRecruiterCandidates = async ({ domain = '', minSkillScore = 0, minReadiness = 0 } = {}) => {
+  const query = new URLSearchParams();
+  if (domain) query.set('domain', domain);
+  if (Number(minSkillScore) > 0) query.set('minSkillScore', String(Number(minSkillScore)));
+  if (Number(minReadiness) > 0) query.set('minReadiness', String(Number(minReadiness)));
+
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const payload = await backendRequest(`/api/recruiter/candidates${suffix}`, { method: 'GET' });
+  return Array.isArray(payload?.candidates) ? payload.candidates : [];
+};
+
+export const createRecruiterTest = async (testPayload) => {
+  return backendRequest('/api/recruiter/tests', {
+    method: 'POST',
+    body: JSON.stringify(testPayload || {}),
+  });
+};
+
+export const fetchRecruiterTests = async ({ mine = true } = {}) => {
+  const suffix = mine ? '?mine=1' : '?mine=0';
+  const payload = await backendRequest(`/api/recruiter/tests${suffix}`, { method: 'GET' });
+  return Array.isArray(payload?.tests) ? payload.tests : [];
+};
+
+export const fetchRecruiterTestLeaderboard = async (testId) => {
+  const payload = await backendRequest(`/api/recruiter/tests/${testId}/leaderboard`, { method: 'GET' });
+  return {
+    test: payload?.test || null,
+    leaderboard: Array.isArray(payload?.leaderboard) ? payload.leaderboard : [],
+  };
+};
+
+export const updateRecruiterTest = async (testId, updates) => {
+  return backendRequest(`/api/recruiter/tests/${testId}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates || {}),
+  });
+};
+
+export const deleteRecruiterTest = async (testId) => {
+  return backendRequest(`/api/recruiter/tests/${testId}`, {
+    method: 'DELETE',
+  });
+};
+
+export const assignRecruiterTestCandidates = async (testId, userIds = []) => {
+  return backendRequest(`/api/recruiter/tests/${testId}/assignments`, {
+    method: 'POST',
+    body: JSON.stringify({ userIds }),
+  });
+};
+
+export const fetchRecruiterTestAssignments = async (testId) => {
+  const payload = await backendRequest(`/api/recruiter/tests/${testId}/assignments`, { method: 'GET' });
+  return Array.isArray(payload?.assignments) ? payload.assignments : [];
+};
+
+export const downloadRecruiterTestLeaderboardCsv = async (testId) => {
+  const token = await getAccessToken();
+  const response = await fetch(`${BACKEND_URL}/api/recruiter/tests/${testId}/leaderboard?format=csv`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload?.error || `Request failed with status ${response.status}`);
+  }
+
+  return response.text();
+};
+
+export const fetchMyAssignedCompanyTests = async () => {
+  const payload = await backendRequest('/api/company-tests/me', { method: 'GET' });
+  return Array.isArray(payload?.tests) ? payload.tests : [];
+};
+
+export const fetchMyCompanyTestProgress = async (testId) => {
+  const payload = await backendRequest(`/api/company-tests/${testId}/my-progress`, { method: 'GET' });
+  return {
+    test: payload?.test || null,
+    progress: payload?.progress || null,
+  };
 };

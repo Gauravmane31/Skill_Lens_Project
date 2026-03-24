@@ -4,7 +4,7 @@ import toast, { Toaster } from "react-hot-toast";
 import GlobalStyle from "./components/shared/GlobalStyle.jsx";
 import { NOTIFS_INIT } from "./data/constants.js";
 import { supabase } from "./utils/supabase.js";
-import { syncUserProfile } from "./utils/api.js";
+import { syncUserProfile, fetchNotifications, markNotificationsRead as markNotificationsReadApi } from "./utils/api.js";
 
 import PublicNav from "./components/PublicNav.jsx";
 import LandingPage from "./components/LandingPage.jsx";
@@ -19,6 +19,9 @@ import LeaderboardPage from "./components/LeaderboardPage.jsx";
 import JobBoardPage from "./components/JobBoardPage.jsx";
 import ResumePage from "./components/ResumePage.jsx";
 import CareerGuidancePage from "./components/CareerGuidancePage.jsx";
+import RecruiterDashboardPage from "./components/RecruiterDashboardPage.jsx";
+import NotificationsPage from "./components/NotificationsPage.jsx";
+import CompanyTestsPage from "./components/CompanyTestsPage.jsx";
 
 // ── Root App ──────────────────────────────────────────────────────────────────
 export default function SkillLens(){
@@ -34,7 +37,34 @@ export default function SkillLens(){
   const handleLogoutLocal=()=>{setUser(null);setScreen("landing");setPage("dashboard");setResults([]);setSelectedChallenge(null);};
   const handleLogout=async ()=> { await supabase.auth.signOut(); handleLogoutLocal(); };
   const handleSubmit=result=>{setResults(r=>[...r,result]);setPage("results");};
-  const markNotifsRead=()=>setNotifications(n=>n.map(x=>({...x,read:true})));
+  const refreshNotifications = async () => {
+    try {
+      const rows = await fetchNotifications();
+      setNotifications(rows);
+    } catch (error) {
+      console.error("Failed to load notifications:", error);
+    }
+  };
+
+  const markNotifsRead = async () => {
+    const unreadIds = notifications.filter((item) => !item.read).map((item) => item.id);
+    setNotifications((n) => n.map((x) => ({ ...x, read: true })));
+    try {
+      await markNotificationsReadApi(unreadIds);
+    } catch (error) {
+      console.error("Failed to mark notifications read:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (screen !== "app" || !user?.id) return undefined;
+
+    const interval = setInterval(() => {
+      refreshNotifications();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [screen, user?.id]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -70,8 +100,10 @@ export default function SkillLens(){
       avatar: sUser.user_metadata?.avatar_url || fallbackAvatar,
       points: syncedProfile?.points ?? prev?.points ?? 0,
       streak: syncedProfile?.streak ?? prev?.streak ?? 0,
+      role: syncedProfile?.role || prev?.role || "student",
       provider: sUser.app_metadata.provider || "email"
     }));
+    await refreshNotifications();
     setScreen("app");
   };
 
@@ -84,6 +116,9 @@ export default function SkillLens(){
       case "certificate": return <CertificatePage results={results} user={user}/>;
       case "leaderboard": return <LeaderboardPage user={user} results={results}/>;
       case "jobs":        return <JobBoardPage results={results}/>;
+      case "companyTests": return <CompanyTestsPage setPage={setPage} setSelectedChallenge={setSelectedChallenge} />;
+      case "notifications": return <NotificationsPage notifications={notifications} />;
+      case "recruiter":   return <RecruiterDashboardPage user={user} onRoleChange={(role)=>setUser((prev)=>({...(prev||{}), role}))} />;
       case "guidance":    return <CareerGuidancePage user={user}/>;
       case "profile":     return <ResumePage user={user} results={results}/>;
       default:            return <DashboardPage results={results} user={user} setPage={setPage} setSelectedChallenge={setSelectedChallenge}/>;

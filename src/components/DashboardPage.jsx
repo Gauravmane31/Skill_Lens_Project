@@ -98,7 +98,7 @@ function DashboardPage({results,user,setPage,setSelectedChallenge}){
 
             {/* Challenge Grid */}
             <Card>
-              <SectionHeader title="All Challenges" sub={`${completedIds.size}/${CHALLENGES.length} completed`} action={
+              <SectionHeader title="All Hiring Tests" sub={`${completedIds.size}/${CHALLENGES.length} completed`} action={
                 <button onClick={()=>setPage("challenges")} style={{background:"none",border:"none",color:C.indigo,fontWeight:700,fontSize:13,cursor:"pointer"}}>See all →</button>
               }/>
               <div className="sl-grid-4">

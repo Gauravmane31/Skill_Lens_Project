@@ -11,13 +11,18 @@ function TopNav({ page, setPage, user, onLogout, notifications, markNotifsRead }
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: "🏠" },
     { id: "challenges", label: "Challenges", icon: "⌨️" },
+    { id: "companyTests", label: "My Tests", icon: "🧪" },
     { id: "leaderboard", label: "Leaderboard", icon: "🏆" },
     { id: "jobs", label: "Job Board", icon: "💼" },
+    { id: "notifications", label: "Notifications", icon: "🔔" },
     { id: "guidance", label: "Guidance", icon: "🧠" },
     { id: "results", label: "Analytics", icon: "📊" },
     { id: "certificate", label: "Certs", icon: "📜" },
     { id: "profile", label: "Profile", icon: "👤" },
   ];
+  if (["recruiter", "admin"].includes(String(user?.role || "").toLowerCase())) {
+    navItems.splice(5, 0, { id: "recruiter", label: "Recruiter", icon: "🧑‍💼" });
+  }
   const go = id => { setPage(id); setOpen(false); setNotifOpen(false); };
   return (
     <>

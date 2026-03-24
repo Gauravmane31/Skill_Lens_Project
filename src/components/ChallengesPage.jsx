@@ -44,7 +44,7 @@ function ChallengesPage({setPage,setSelectedChallenge,results}){
 
   return(
     <div style={{overflowY:"auto",flex:1,background:C.bg}}>
-      <PageHero tag="⌨️ Coding Challenges" title="Solve. Prove. Certify." sub={`${dbProblems.length} challenges across categories. Earn XP and certificates.`}/>
+      <PageHero tag="🧪 Company Hiring Tests" title="Practice Real Hiring Assessments." sub={`${dbProblems.length} tests across job tracks. Earn XP and showcase readiness.`}/>
       <div className="sl-page-wrap" style={{padding:isMobile?"16px 14px":"20px 24px"}}>
         {/* Stats row */}
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)",gap:12,marginBottom:18}}>
@@ -64,7 +64,7 @@ function ChallengesPage({setPage,setSelectedChallenge,results}){
 
         {/* Search & filters */}
         <div style={{marginBottom:14}}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search challenges or tags…"
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search hiring tests, companies, or tags…"
             style={{...inputSt,marginBottom:10,padding:"10px 14px"}}/>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
             {cats.map(c=><Pill key={c} label={c} active={filter===c} onClick={()=>setFilter(c)}/>)}
