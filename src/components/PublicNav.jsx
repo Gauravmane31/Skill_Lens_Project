@@ -1,6 +1,6 @@
 
 import React, { useState } from "react";
-import { C } from "../data/constants.js";
+import { C } from "../data/constants/constants.js";
 
 // ── Public Nav ────────────────────────────────────────────────────────────────
 function PublicNav({ onLogin, onSignup, onLogoClick }) {
@@ -11,7 +11,7 @@ function PublicNav({ onLogin, onSignup, onLogoClick }) {
       <nav style={{ background: C.white, borderBottom: `1px solid ${C.border}`, height: 60, flexShrink: 0, zIndex: 100, position: "relative" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", height: "100%", gap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginRight: 14, flexShrink: 0, cursor: onLogoClick ? "pointer" : "default" }} onClick={onLogoClick}>
-            <img src="MainLogo-removebg-preview.png" alt="logo" style={{ width: 90, height: 50, objectFit:"contain" }} />
+            <img src="MainLogo-removebg-preview.png" alt="logo" style={{ width: 90, height: 50, objectFit: "contain" }} />
           </div>
           <div className="sl-nav-links">
             {navItems.map(l => <button key={l} style={{ padding: "6px 13px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: "transparent", color: C.muted, whiteSpace: "nowrap" }}>{l}</button>)}

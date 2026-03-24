@@ -1,20 +1,20 @@
 
 import React, { useState } from "react";
-import { C } from "../data/constants.js";
+import { C } from "../data/constants/constants.js";
 import useBreakpoint from "../components/shared/useBreakpoint.js";
 import { inputSt } from "../components/shared/Atoms.jsx";
 import { supabase } from "../utils/supabase.js";
 import { loginWithEmail, signupWithEmail } from "../utils/api.js";
 
-function AuthGate({onLogin,onBack,mode:initMode="login"}){
-  const [mode,setMode]=useState(initMode);
-  const [email,setEmail]=useState("");
-  const [password,setPassword]=useState("");
-  const [name,setName]=useState("");
-  const [error,setError]=useState("");
-  const [loading,setLoading]=useState(false);
-  const [showPw,setShowPw]=useState(false);
-  const {isMobile}=useBreakpoint();
+function AuthGate({ onLogin, onBack, mode: initMode = "login" }) {
+  const [mode, setMode] = useState(initMode);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const { isMobile } = useBreakpoint();
 
   const normalizeAuthError = (authError) => {
     const message = String(authError?.message || "Authentication failed.");
@@ -40,8 +40,8 @@ function AuthGate({onLogin,onBack,mode:initMode="login"}){
 
   const handleEmail=async ()=>{
     setError("");
-    if(!email.includes("@")){setError("Enter a valid email.");return;}
-    if(password.length<6){setError("Password must be at least 6 characters.");return;}
+    if (!email.includes("@")) { setError("Enter a valid email."); return; }
+    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
 
     setLoading(true);
     try {
@@ -61,7 +61,7 @@ function AuthGate({onLogin,onBack,mode:initMode="login"}){
           });
         }
       } else {
-        if(!name.trim()){setError("Please enter your name.");return;}
+        if (!name.trim()) { setError("Please enter your name."); return; }
 
         const data = await signupWithEmail({ name, email, password });
 
@@ -100,9 +100,9 @@ function AuthGate({onLogin,onBack,mode:initMode="login"}){
       }
     });
     if (error) {
-       console.error(error);
-       setError(error.message);
-       setLoading(false);
+      console.error(error);
+      setError(error.message);
+      setLoading(false);
     }
   };
 
@@ -139,32 +139,29 @@ function AuthGate({onLogin,onBack,mode:initMode="login"}){
             </div>
           </div>
         )}
-
         <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,padding:isMobile?"0":"28px 20px",overflowY:"auto"}}>
           <div style={{width:"100%",maxWidth:420}}>
-          {/* Back to home */}
-          {onBack&&(
+          {onBack && (
             <button onClick={onBack}
-              style={{display:"flex",alignItems:"center",gap:6,background:"none",border:`1px solid ${C.border}`,cursor:"pointer",color:C.textMid,fontSize:13,fontWeight:600,marginBottom:24,padding:"7px 14px",borderRadius:8,transition:"all .15s",width:"fit-content"}}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.indigo;e.currentTarget.style.color=C.indigo;}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.textMid;}}>
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${C.border}`, cursor: "pointer", color: C.textMid, fontSize: 13, fontWeight: 600, marginBottom: 24, padding: "7px 14px", borderRadius: 8, transition: "all .15s", width: "fit-content" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = C.indigo; e.currentTarget.style.color = C.indigo; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textMid; }}>
               ← Back to Home
             </button>
           )}
-          {/* Header */}
-          <div style={{marginBottom:28}}>
-            {isMobile&&(
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
-                <img src="MainLogo-removebg-preview.png" alt="logo" style={{ width: 90, height: 50, objectFit:"contain" }} />
+          <div style={{ marginBottom: 28 }}>
+            {isMobile && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <img src="MainLogo-removebg-preview.png" alt="logo" style={{ width: 90, height: 50, objectFit: "contain" }} />
               </div>
             )}
-            <h2 style={{fontWeight:900,fontSize:24,color:C.text,margin:"0 0 6px"}}>{mode==="login"?"Welcome back":"Create your account"}</h2>
-            <p style={{color:C.muted,fontSize:13,margin:0}}>{mode==="login"?"Log in to continue your coding journey":"Start earning verifiable certificates today — free"}</p>
+            <h2 style={{ fontWeight: 900, fontSize: 24, color: C.text, margin: "0 0 6px" }}>{mode === "login" ? "Welcome back" : "Create your account"}</h2>
+            <p style={{ color: C.muted, fontSize: 13, margin: 0 }}>{mode === "login" ? "Log in to continue your coding journey" : "Start earning verifiable certificates today — free"}</p>
           </div>
 
-          <div style={{background:C.white,borderRadius:16,padding:24,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
+          <div style={{ background: C.white, borderRadius: 16, padding: 24, boxShadow: "0 1px 6px rgba(0,0,0,.06)" }}>
             {/* Social */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
               {[
                 {p:"google", label:"Google", icon:(
                   <svg width="16" height="16" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -190,39 +187,39 @@ function AuthGate({onLogin,onBack,mode:initMode="login"}){
               ))}
             </div>
 
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
-              <div style={{flex:1,height:1,background:C.border}}/>
-              <span style={{fontSize:12,color:C.muted,flexShrink:0}}>or continue with email</span>
-              <div style={{flex:1,height:1,background:C.border}}/>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+              <div style={{ flex: 1, height: 1, background: C.border }} />
+              <span style={{ fontSize: 12, color: C.muted, flexShrink: 0 }}>or continue with email</span>
+              <div style={{ flex: 1, height: 1, background: C.border }} />
             </div>
 
-            {mode==="signup"&&<input value={name} onChange={e=>setName(e.target.value)} placeholder="Full name" style={inputSt}/>}
-            <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email address" type="email" style={inputSt}/>
-            <div style={{position:"relative",marginBottom:10}}>
-              <input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" type={showPw?"text":"password"}
-                style={{...inputSt,marginBottom:0,paddingRight:44}}
-                onKeyDown={e=>e.key==="Enter"&&handleEmail()}/>
-              <button onClick={()=>setShowPw(p=>!p)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15,color:C.muted}}>{showPw?"🙈":"👁"}</button>
+            {mode === "signup" && <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" style={inputSt} />}
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" type="email" style={inputSt} />
+            <div style={{ position: "relative", marginBottom: 10 }}>
+              <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type={showPw ? "text" : "password"}
+                style={{ ...inputSt, marginBottom: 0, paddingRight: 44 }}
+                onKeyDown={e => e.key === "Enter" && handleEmail()} />
+              <button onClick={() => setShowPw(p => !p)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 15, color: C.muted }}>{showPw ? "🙈" : "👁"}</button>
             </div>
 
-            {error&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:9,padding:"9px 12px",marginBottom:12,fontSize:12,color:C.red}}>{error}</div>}
+            {error && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 9, padding: "9px 12px", marginBottom: 12, fontSize: 12, color: C.red }}>{error}</div>}
 
             <button onClick={handleEmail} disabled={loading} className="sl-btn-hover"
-              style={{width:"100%",padding:"13px",background:loading?C.muted:`linear-gradient(135deg,${C.indigo} 0%,#6366f1 100%)`,color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:14,boxShadow:loading?"none":"0 4px 14px rgba(79,70,229,.35)"}}>
-              {loading?"Please wait…":mode==="login"?"Log In →":"Create Account →"}
+              style={{ width: "100%", padding: "13px", background: loading ? C.muted : `linear-gradient(135deg,${C.indigo} 0%,#6366f1 100%)`, color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 14, boxShadow: loading ? "none" : "0 4px 14px rgba(79,70,229,.35)" }}>
+              {loading ? "Please wait…" : mode === "login" ? "Log In →" : "Create Account →"}
             </button>
 
-            <div style={{textAlign:"center",fontSize:13}}>
-              {mode==="login"?(
-                <><span style={{color:C.muted}}>Don't have an account? </span><button onClick={()=>{setMode("signup");setError("");}} style={{color:C.indigo,fontWeight:700,background:"none",border:"none",cursor:"pointer"}}>Sign up free</button></>
-              ):(
-                <><span style={{color:C.muted}}>Already have an account? </span><button onClick={()=>{setMode("login");setError("");}} style={{color:C.indigo,fontWeight:700,background:"none",border:"none",cursor:"pointer"}}>Log in</button></>
+            <div style={{ textAlign: "center", fontSize: 13 }}>
+              {mode === "login" ? (
+                <><span style={{ color: C.muted }}>Don't have an account? </span><button onClick={() => { setMode("signup"); setError(""); }} style={{ color: C.indigo, fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>Sign up free</button></>
+              ) : (
+                <><span style={{ color: C.muted }}>Already have an account? </span><button onClick={() => { setMode("login"); setError(""); }} style={{ color: C.indigo, fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>Log in</button></>
               )}
             </div>
           </div>
 
-          {mode==="login"&&(
-            <div style={{marginTop:16,padding:"10px 12px",background:C.white,border:`1px solid ${C.border}`,borderRadius:10,color:C.muted,fontSize:12,lineHeight:1.6}}>
+          {mode === "login" && (
+            <div style={{ marginTop: 16, padding: "10px 12px", background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, color: C.muted, fontSize: 12, lineHeight: 1.6 }}>
               Tip: Use Sign up to create an account with Supabase Auth, then log in here.
             </div>
           )}

@@ -1,6 +1,6 @@
 
 import React, { useState } from "react";
-import { C } from "../data/constants.js";
+import { C } from "../data/constants/constants.js";
 import { Avatar } from "./shared/Atoms.jsx";
 
 // ── TopNav ────────────────────────────────────────────────────────────────────

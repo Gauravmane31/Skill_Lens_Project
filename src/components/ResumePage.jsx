@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useRef } from "react";
-import { C } from "../data/constants.js";
+import { C } from "../data/constants/constants.js";
 import { scoreColor, integrityLabel } from "../data/scoring.js";
 import useBreakpoint from "./shared/useBreakpoint.js";
 import { PageHero, Card, inputSt, ProgressBar, CircleScore, Avatar } from "./shared/Atoms.jsx";

@@ -1,6 +1,6 @@
 
 import React from "react";
-import { C, CHALLENGES, LEADERBOARD } from "../data/constants.js";
+import { C, CHALLENGES, LEADERBOARD } from "../data/constants/constants.js";
 import { scoreColor, integrityLabel, jobSuggestions, skillGaps, aiAnalysis } from "../data/scoring.js";
 import useBreakpoint from "./shared/useBreakpoint.js";
 import { Badge, ProgressBar, CircleScore, Card, SectionHeader, Pill } from "./shared/Atoms.jsx";
@@ -31,11 +31,11 @@ function DashboardPage({results,user,setPage,setSelectedChallenge}){
       }
     }, [careerGuidance, user?.id]);
 
-  const roles = profileData?.recommendedRoles?.length 
-      ? profileData.recommendedRoles.map(r => ({role: r, prob: 95, color: C.indigo})) 
+  const roles = profileData?.recommendedRoles?.length
+      ? profileData.recommendedRoles.map(r => ({role: r, prob: 95, color: C.indigo}))
       : (latest?jobSuggestions(latest.codeScore,latest.integrityScore):[]);
-      
-  const gaps = profileData?.weaknesses?.length 
+
+  const gaps = profileData?.weaknesses?.length
       ? profileData.weaknesses.map(w => `Consider practicing more challenges in ${w} to improve your domain score.`)
       : (latest?skillGaps(latest.codeScore):[]);
   const completedIds=new Set(results.map(r=>r.challenge.id));
@@ -175,7 +175,7 @@ function DashboardPage({results,user,setPage,setSelectedChallenge}){
               <SectionHeader title="🎯 Target Role Analysis" sub={careerGuidance?.recommendedRoles?.length > 0 ? `Evaluating readiness for: ${careerGuidance.recommendedRoles[0]}` : "Identify your skill gaps"} action={
                 <button onClick={()=>setPage("jobs")} style={{background:"none",border:"none",color:C.indigo,fontWeight:700,fontSize:13,cursor:"pointer"}}>View all skills →</button>
               }/>
-              
+
               {gapAnalysis ? (
                   <>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
@@ -184,7 +184,7 @@ function DashboardPage({results,user,setPage,setSelectedChallenge}){
                       </div>
                       <ProgressBar value={gapAnalysis.readinessScore} color={scoreColor(gapAnalysis.readinessScore)} height={6} />
                       <p style={{fontSize:11,color:C.muted,marginTop:10,marginBottom:14,borderLeft:`2px solid ${C.indigo}`,paddingLeft:8}}>{gapAnalysis.explanation}</p>
-                      
+
                       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
                           <div style={{background:"rgba(239,68,68,.1)",borderRadius:10,padding:12,border:"1px solid rgba(239,68,68,.2)"}}>
                               <div style={{fontSize:10,fontWeight:800,color:"#ef4444",textTransform:"uppercase",marginBottom:8,display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:14}}>⚠️</span> Missing Skills</div>
@@ -254,7 +254,7 @@ function DashboardPage({results,user,setPage,setSelectedChallenge}){
                 <span style={{width:5,height:5,background:"#818cf8",borderRadius:"50%",display:"inline-block",boxShadow:"0 0 8px #818cf8"}}/>
                 <span style={{fontSize:10,fontWeight:700,color:"#c7d2fe",letterSpacing:.5,textTransform:"uppercase"}}>AI Career Mentor</span>
               </div>
-              
+
               {careerGuidance ? (
                   <>
                         {(careerGuidance?.recommendedRoles || []).length > 0 && (
@@ -270,18 +270,18 @@ function DashboardPage({results,user,setPage,setSelectedChallenge}){
                               </div>
                           </div>
                       )}
-                      
+
                       <div style={{background:"rgba(255,255,255,.05)",padding:"12px 14px",borderRadius:10,borderLeft:"3px solid #818cf8",marginBottom:12}}>
                           <div style={{fontSize:11,color:"#e2e8f0",lineHeight:1.5,fontWeight:500}}>"{careerGuidance.reasoning}"</div>
                       </div>
-                      
+
                       {careerGuidance.growthPath && (
                           <div style={{marginBottom:12}}>
                               <div style={{fontSize:11,fontWeight:800,color:"#94a3b8",marginBottom:4,display:"flex",alignItems:"center",gap:4}}><span>📈</span> Suggested Growth Path</div>
                               <div style={{fontSize:11,color:"#cbd5e1",lineHeight:1.5}}>{careerGuidance.growthPath}</div>
                           </div>
                       )}
-                      
+
                         {(careerGuidance?.alternativeRoles || []).length > 0 && (
                           <div style={{marginTop:12,borderTop:"1px solid rgba(255,255,255,.08)",paddingTop:12}}>
                               <div style={{fontSize:10,color:"#64748b",textTransform:"uppercase",marginBottom:6}}>Alternative Pathways</div>

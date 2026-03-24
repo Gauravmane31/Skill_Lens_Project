@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { C, CHALLENGES as STATIC_CHALLENGES } from "../data/constants.js";
+import { C, CHALLENGES as STATIC_CHALLENGES } from "../data/constants/constants.js";
 import useBreakpoint from "./shared/useBreakpoint.js";
 import { Card, Badge, ProgressBar, Pill, PageHero, inputSt } from "./shared/Atoms.jsx";
 import { fetchProblems } from "../utils/api.js";
@@ -11,7 +11,7 @@ function ChallengesPage({setPage,setSelectedChallenge,results}){
   const [diffFilter,setDiffFilter]=useState("All");
   const {isMobile}=useBreakpoint();
   const [dbProblems, setDbProblems] = useState([]);
-  
+
   useEffect(() => {
     fetchProblems().then(data => {
       // Merge with static metadata for UI (icons, colors, etc.)

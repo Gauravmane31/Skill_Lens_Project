@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js';
-import { CHALLENGES } from '../data/constants.js';
+import { CHALLENGES } from '../data/constants/constants.js';
 import { aiAnalysis, jobSuggestions, skillGaps } from '../data/scoring.js';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
@@ -125,9 +125,9 @@ const buildAnalysis = (submissions = []) => {
   const momentumScore = clamp(50 + (recentAvg - previousAvg), 0, 100);
   const variance = recent.length
     ? recent.reduce((sum, item) => {
-        const score = Number(item.code_score || 0);
-        return sum + Math.pow(score - recentAvg, 2);
-      }, 0) / recent.length
+      const score = Number(item.code_score || 0);
+      return sum + Math.pow(score - recentAvg, 2);
+    }, 0) / recent.length
     : 0;
   const consistencyScore = clamp(Math.round(100 - Math.sqrt(variance)), 0, 100);
   const readinessScore = clamp(Math.round((avgCode + avgIntegrity + momentumScore) / 3), 0, 100);

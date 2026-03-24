@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import GlobalStyle from "./components/shared/GlobalStyle.jsx";
-import { NOTIFS_INIT } from "./data/constants.js";
+import { NOTIFS_INIT } from "./data/constants/constants.js";
 import { supabase } from "./utils/supabase.js";
 import { syncUserProfile, fetchNotifications, markNotificationsRead as markNotificationsReadApi } from "./utils/api.js";
 
@@ -24,47 +24,20 @@ import NotificationsPage from "./components/NotificationsPage.jsx";
 import CompanyTestsPage from "./components/CompanyTestsPage.jsx";
 
 // ── Root App ──────────────────────────────────────────────────────────────────
-export default function SkillLens(){
-  const [screen,setScreen]=useState("landing");
-  const [authMode,setAuthMode]=useState("login");
-  const [user,setUser]=useState(null);
-  const [page,setPage]=useState("dashboard");
-  const [results,setResults]=useState([]);
-  const [selectedChallenge,setSelectedChallenge]=useState(null);
-  const [notifications,setNotifications]=useState(NOTIFS_INIT);
+export default function SkillLens() {
+  const [screen, setScreen] = useState("landing");
+  const [authMode, setAuthMode] = useState("login");
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState("dashboard");
+  const [results, setResults] = useState([]);
+  const [selectedChallenge, setSelectedChallenge] = useState(null);
+  const [notifications, setNotifications] = useState(NOTIFS_INIT);
 
   const handleLogin=u=>{setUser(u);setScreen("app");setPage("dashboard");};
   const handleLogoutLocal=()=>{setUser(null);setScreen("landing");setPage("dashboard");setResults([]);setSelectedChallenge(null);};
   const handleLogout=async ()=> { await supabase.auth.signOut(); handleLogoutLocal(); };
   const handleSubmit=result=>{setResults(r=>[...r,result]);setPage("results");};
-  const refreshNotifications = async () => {
-    try {
-      const rows = await fetchNotifications();
-      setNotifications(rows);
-    } catch (error) {
-      console.error("Failed to load notifications:", error);
-    }
-  };
-
-  const markNotifsRead = async () => {
-    const unreadIds = notifications.filter((item) => !item.read).map((item) => item.id);
-    setNotifications((n) => n.map((x) => ({ ...x, read: true })));
-    try {
-      await markNotificationsReadApi(unreadIds);
-    } catch (error) {
-      console.error("Failed to mark notifications read:", error);
-    }
-  };
-
-  useEffect(() => {
-    if (screen !== "app" || !user?.id) return undefined;
-
-    const interval = setInterval(() => {
-      refreshNotifications();
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [screen, user?.id]);
+  const markNotifsRead=()=>setNotifications(n=>n.map(x=>({...x,read:true})));
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -80,7 +53,7 @@ export default function SkillLens(){
     let name = sUser.user_metadata?.full_name || sUser.email;
     let fallbackAvatar = name ? name[0].toUpperCase() : "U";
     let syncedProfile = null;
-    
+
     // Sync profile data in Supabase public schema.
     try {
       syncedProfile = await syncUserProfile(
@@ -116,36 +89,33 @@ export default function SkillLens(){
       case "certificate": return <CertificatePage results={results} user={user}/>;
       case "leaderboard": return <LeaderboardPage user={user} results={results}/>;
       case "jobs":        return <JobBoardPage results={results}/>;
-      case "companyTests": return <CompanyTestsPage setPage={setPage} setSelectedChallenge={setSelectedChallenge} />;
-      case "notifications": return <NotificationsPage notifications={notifications} />;
-      case "recruiter":   return <RecruiterDashboardPage user={user} onRoleChange={(role)=>setUser((prev)=>({...(prev||{}), role}))} />;
       case "guidance":    return <CareerGuidancePage user={user}/>;
       case "profile":     return <ResumePage user={user} results={results}/>;
       default:            return <DashboardPage results={results} user={user} setPage={setPage} setSelectedChallenge={setSelectedChallenge}/>;
     }
   };
 
-  return(
+  return (
     <>
-      <GlobalStyle/>
+      <GlobalStyle />
       <Toaster position="top-right" toastOptions={{ style: { background: "#13161f", color: "#e2e8f0" } }} />
-      <div style={{height:"100dvh",display:"flex",flexDirection:"column",fontFamily:"'DM Sans',system-ui,sans-serif",overflow:"hidden"}}>
-        {screen==="landing"&&(
+      <div style={{ height: "100dvh", display: "flex", flexDirection: "column", fontFamily: "'DM Sans',system-ui,sans-serif", overflow: "hidden" }}>
+        {screen === "landing" && (
           <>
-            <PublicNav onLogin={()=>{setAuthMode("login");setScreen("auth");}} onSignup={()=>{setAuthMode("signup");setScreen("auth");}}/>
-            <LandingPage onGetStarted={()=>{setAuthMode("signup");setScreen("auth");}} onLogin={()=>{setAuthMode("login");setScreen("auth");}}/>
+            <PublicNav onLogin={() => { setAuthMode("login"); setScreen("auth"); }} onSignup={() => { setAuthMode("signup"); setScreen("auth"); }} />
+            <LandingPage onGetStarted={() => { setAuthMode("signup"); setScreen("auth"); }} onLogin={() => { setAuthMode("login"); setScreen("auth"); }} />
           </>
         )}
-        {screen==="auth"&&(
+        {screen === "auth" && (
           <>
-            <PublicNav onLogin={()=>setAuthMode("login")} onSignup={()=>setAuthMode("signup")} onLogoClick={()=>setScreen("landing")}/>
-            <AuthGate onLogin={handleLogin} onBack={()=>setScreen("landing")} mode={authMode}/>
+            <PublicNav onLogin={() => setAuthMode("login")} onSignup={() => setAuthMode("signup")} onLogoClick={() => setScreen("landing")} />
+            <AuthGate onLogin={handleLogin} onBack={() => setScreen("landing")} mode={authMode} />
           </>
         )}
-        {screen==="app"&&(
+        {screen === "app" && (
           <>
-            <TopNav page={page} setPage={setPage} user={user} onLogout={handleLogout} notifications={notifications} markNotifsRead={markNotifsRead}/>
-            <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minHeight:0}}>
+            <TopNav page={page} setPage={setPage} user={user} onLogout={handleLogout} notifications={notifications} markNotifsRead={markNotifsRead} />
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
               {renderPage()}
             </div>
           </>
