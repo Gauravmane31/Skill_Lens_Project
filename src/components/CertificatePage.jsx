@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from "react";
-import { C } from "../data/constants.js";
+import { C } from "../data/constants/constants.js";
 import { integrityLabel, scoreColor } from "../data/scoring.js";
 import useBreakpoint from "./shared/useBreakpoint.js";
 import { PageHero, Pill, Badge, CircleScore, Card, Avatar } from "./shared/Atoms.jsx";

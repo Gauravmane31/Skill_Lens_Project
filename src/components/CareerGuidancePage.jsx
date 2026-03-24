@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { C } from "../data/constants.js";
+import { C } from "../data/constants/constants.js";
 import useBreakpoint from "./shared/useBreakpoint.js";
 import { Card, SectionHeader, PageHero, ProgressBar, Badge } from "./shared/Atoms.jsx";
 import { fetchCareerGuidance, fetchGapAnalysis, fetchLearningPath, fetchProgressInsights } from "../utils/api.js";

@@ -1,6 +1,6 @@
 
 import React, { useState } from "react";
-import { C } from "../data/constants.js";
+import { C } from "../data/constants/constants.js";
 import { scoreColor, integrityLabel, aiAnalysis, jobSuggestions, skillGaps } from "../data/scoring.js";
 import useBreakpoint from "./shared/useBreakpoint.js";
 import { PageHero, Card, SectionHeader, CircleScore, ProgressBar, Pill, Badge } from "./shared/Atoms.jsx";
@@ -21,13 +21,13 @@ function ResultsPage({results,setPage}){
 
   const r = results[sel];
   const il = integrityLabel(r.integrityScore);
-  
+
   const backend = r.backendResult || {};
   const strengths = (backend.strengths && backend.strengths.length > 0) ? backend.strengths : aiAnalysis(r.codeScore).strengths;
-  const improvements = (backend.improvementTips && backend.improvementTips.length > 0) ? backend.improvementTips : 
+  const improvements = (backend.improvementTips && backend.improvementTips.length > 0) ? backend.improvementTips :
                        (backend.weaknesses && backend.weaknesses.length > 0) ? backend.weaknesses : aiAnalysis(r.codeScore).improvements;
   const gaps = (backend.conceptGaps && backend.conceptGaps.length > 0) ? backend.conceptGaps : skillGaps(r.codeScore);
-  
+
   const roles = jobSuggestions(r.codeScore, r.integrityScore);
 
   // Overall stats across all results
