@@ -10,6 +10,7 @@ import { Badge } from "./shared/Atoms.jsx";
 import { submitCode } from "../utils/api.js";
 import { BOILERPLATE } from "../data/constants/boilerplate.js";
 import { C } from "../data/constants/constants.js";
+import Proctoring from "./Proctoring.jsx";
 
 const COMPILER_API = import.meta.env.VITE_COMPILER_API_URL || "http://localhost:5000";
 
@@ -28,9 +29,10 @@ function SessionPage({ challenge, onSubmit, setPage }) {
   const [stdin, setStdin] = useState("");
   const [showStdin, setShowStdin] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(160);
+  const [proctoringViolations, setProctoringViolations] = useState(0);
   const dragRef = useRef(null);
   const { isMobile } = useBreakpoint();
-  const metricsRef = useRef({ keystrokes: 0, pasteEvents: 0, largestPaste: 0, pasteChars: 0, tabSwitches: 0 });
+  const metricsRef = useRef({ keystrokes: 0, pasteEvents: 0, largestPaste: 0, pasteChars: 0, tabSwitches: 0, faceViolations: 0 });
   const editorRef = useRef(null);
   const [, tick] = useState(0);
 
@@ -56,6 +58,26 @@ function SessionPage({ challenge, onSubmit, setPage }) {
 
   const fmt = s => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
+  // ── Proctoring Violation Handler ─────────────────────────────────────────────
+  const handleProctoringViolation = (type, details) => {
+    setProctoringViolations(prev => prev + 1);
+    metricsRef.current.faceViolations = metricsRef.current.faceViolations + 1;
+    
+    if (type === "DISQUALIFIED") {
+      toast.error(`🚫 Test Disqualified: ${details.reason}`, { duration: 6000 });
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(e => console.log(e));
+      }
+      setPage("challenges");
+      return;
+    }
+  };
+
+  // ── Metrics Update Handler ─────────────────────────────────────────────────
+  const handleMetricsUpdate = (metrics) => {
+    // metricsRef.current = { ...metricsRef.current, ...metrics };
+  };
+
   if (!challenge) return (
     <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, background: C.bg, padding: 24 }}>
       <div style={{ fontSize: 56 }}>⌨️</div>
@@ -69,35 +91,98 @@ function SessionPage({ challenge, onSubmit, setPage }) {
     const currentCode = editorRef.current?.getValue() ?? code;
     setRunning(true);
     setOutput("");
-    try {
-      const response = await axios.post(
-        `${COMPILER_API}/api/run`,
-        {
-          language: lang,
-          code: currentCode,
-          stdin,
-        },
-        { timeout: 25000 }
-      );
+    setTestResults(null);
 
-      const result = response.data;
-      setOutput(result.output || "No output returned.");
-      setTestResults(null);
+    const testCases = challenge?.testCases;
 
-      if (result.error) {
-        toast.error("Execution failed");
-      } else {
-        toast.success("Execution complete");
+    // If challenge has test cases, run them with the smart test runner
+    if (testCases && testCases.length > 0) {
+      try {
+        // Send code with test cases to be executed together
+        const response = await axios.post(
+          `${COMPILER_API}/api/run`,
+          { 
+            language: lang, 
+            code: currentCode, 
+            challengeData: {
+              testCases: testCases.map(tc => ({
+                input: tc.input,
+                expected: tc.expected
+              }))
+            }
+          },
+          { timeout: 30000 }
+        );
+        
+        const result = response.data;
+        setOutput(result.output || "No output returned.");
+        
+        // Parse test results from output
+        const outputLines = (result.output || "").split('\n');
+        const testResults = [];
+        let passedCount = 0;
+        
+        for (let i = 0; i < testCases.length; i++) {
+          const testLine = outputLines.find(line => line.includes(`Test ${i + 1}:`));
+          if (testLine) {
+            const passed = testLine.includes('PASS');
+            if (passed) passedCount++;
+            testResults.push({ 
+              passed, 
+              actual: testLine.includes('FAIL') ? 'Incorrect output' : 'Correct',
+              expected: testCases[i].expected,
+              error: testLine.includes('ERROR')
+            });
+          } else {
+            testResults.push({ 
+              passed: false, 
+              actual: 'No result', 
+              expected: testCases[i].expected,
+              error: true 
+            });
+          }
+        }
+        
+        setTestResults(testResults);
+        setActiveTab("tests");
+
+        if (passedCount === testCases.length) {
+          toast.success(`All ${testCases.length} tests passed! 🎉`);
+        } else {
+          toast.error(`${testCases.length - passedCount} test(s) failed`);
+        }
+        
+      } catch (err) {
+        const msg = !err.response
+          ? "Error: Compiler service is offline. Please start the backend (port 5000)."
+          : `Error: ${err.message}`;
+        setOutput(msg);
+        toast.error("Could not run code");
       }
-    } catch (err) {
-      if (err.message.includes("Network Error") || !err.response) {
-        setOutput("Error: Compiler service is offline (Port 4000). Please start the compiler backend.");
-        toast.error("Compiler service offline");
-      } else {
-        setOutput(`Error: ${err.message}`);
+    } else {
+      // No test cases — run with custom stdin
+      try {
+        const response = await axios.post(
+          `${COMPILER_API}/api/run`,
+          { language: lang, code: currentCode, stdin },
+          { timeout: 30000 }
+        );
+        const result = response.data;
+        setOutput(result.output || "No output returned.");
+        if (result.error) {
+          toast.error("Execution failed");
+        } else {
+          toast.success("Execution complete");
+        }
+      } catch (err) {
+        const msg = !err.response
+          ? "Error: Compiler service is offline. Please start the backend (port 5000)."
+          : `Error: ${err.message}`;
+        setOutput(msg);
         toast.error("Could not run code");
       }
     }
+
     setRunning(false);
   };
 
@@ -267,8 +352,10 @@ function SessionPage({ challenge, onSubmit, setPage }) {
                 if (!model) return;
                 const pasted = model.getValueInRange(e.range);
                 if (!pasted || pasted.trim().length < 5) return;
-                const result = checkPlagiarism(pasted, code);
-                console.log("Paste Plagiarism:", result);
+                
+                // Use enhanced proctoring API for paste detection removed by user
+                
+                // Legacy metrics update
                 metricsRef.current.pasteEvents++;
                 metricsRef.current.pasteChars += pasted.length;
                 metricsRef.current.largestPaste = Math.max(metricsRef.current.largestPaste, pasted.split("\n").length);
@@ -359,6 +446,9 @@ function SessionPage({ challenge, onSubmit, setPage }) {
           )}
         </div>
       </div>
+      
+      {/* Proctoring Component */}
+      <Proctoring onViolation={handleProctoringViolation} />
     </div>
   );
 }

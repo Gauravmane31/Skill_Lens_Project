@@ -471,3 +471,29 @@ create policy "Company test assignments update own_or_owner"
         and t.created_by = auth.uid()
     )
   );
+
+-- Proctoring logs table for tracking cheating detection
+create table if not exists public.proctoring_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  violation_type text not null check (violation_type in ('NO_FACE', 'MULTIPLE_FACES', 'ABANDONED', 'TAB_SWITCH', 'COPY_PASTE', 'LARGE_PASTE_DETECTED', 'EXCESSIVE_COPY_PASTE', 'PLAGIARISM_DETECTED', 'EXCESSIVE_TAB_SWITCHING')),
+  violation_details jsonb not null default '{}'::jsonb,
+  timestamp timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+-- RLS for proctoring_logs
+alter table public.proctoring_logs enable row level security;
+
+create policy "Users can view own proctoring logs" on public.proctoring_logs for select using (auth.uid() = user_id);
+create policy "Users can insert own proctoring logs" on public.proctoring_logs for insert with check (auth.uid() = user_id);
+create policy "Recruiters can view proctoring logs" on public.proctoring_logs for select using (
+  exists (
+    select 1 from public.profiles 
+    where profiles.id = auth.uid() 
+    and profiles.role in ('recruiter', 'admin')
+  )
+);
+
+-- Index for better performance
+create index if not exists idx_proctoring_logs_user_timestamp on public.proctoring_logs(user_id, timestamp desc);

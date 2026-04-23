@@ -1,6 +1,12 @@
 import { supabase } from './supabase.js';
 import { CHALLENGES } from '../data/constants/constants.js';
 import { aiAnalysis, jobSuggestions, skillGaps } from '../data/scoring.js';
+import { 
+  getJobSuggestionsWithAI, 
+  analyzeSkillGapsWithAI, 
+  getCareerGuidanceWithAI,
+  analyzeResumeWithAI 
+} from './aiApi.js';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
@@ -414,13 +420,15 @@ export const submitCode = async (payload) => {
     throw updateError;
   }
 
-  const ai = aiAnalysis(codeScore);
+  const ai = await aiAnalysis(codeScore, code, lang, challengeTitle);
   return {
     score: codeScore,
     strengths: ai.strengths,
     weaknesses: ai.improvements,
     improvementTips: ai.improvements,
-    conceptGaps: skillGaps(codeScore),
+    conceptGaps: await skillGaps(codeScore, { skills: [] }, ''),
+    complexity: ai.complexity,
+    suggestions: ai.suggestions
   };
 };
 
@@ -444,8 +452,28 @@ export const fetchUserProfile = async () => {
 export const fetchCareerGuidance = async () => {
   const user = await ensureAuthenticatedUser();
   const submissions = await fetchUserSubmissions(user.id, 50);
+  const profile = await ensureProfile(user);
+  
+  try {
+    // Try AI-powered career guidance first
+    const aiResult = await getCareerGuidanceWithAI(profile, submissions);
+    
+    if (aiResult.success) {
+      return {
+        recommendedRoles: aiResult.data.targetCompanies ? [aiResult.data.currentLevel] : ['Software Developer'],
+        confidenceScore: aiResult.data.marketReadiness || 70,
+        reasoning: aiResult.data.overallAssessment || 'Based on your performance and skills',
+        growthPath: aiResult.data.longTermVision || 'Continue developing technical skills',
+        nextSteps: aiResult.data.nextSteps || ['Keep practicing', 'Build projects'],
+        marketReadiness: aiResult.data.marketReadiness || 70
+      };
+    }
+  } catch (error) {
+    console.error('AI Career Guidance failed, using fallback:', error);
+  }
+  
+  // Fallback to original analysis
   const analysis = buildAnalysis(submissions);
-
   return {
     recommendedRoles: analysis.recommendedRoles,
     confidenceScore: analysis.confidenceScore,
@@ -457,8 +485,28 @@ export const fetchCareerGuidance = async () => {
 export const fetchGapAnalysis = async (_userId, roleName = 'Target Role') => {
   const user = await ensureAuthenticatedUser();
   const submissions = await fetchUserSubmissions(user.id, 50);
+  const profile = await ensureProfile(user);
+  
+  try {
+    // Try AI-powered skill gap analysis first
+    const aiResult = await analyzeSkillGapsWithAI(profile, roleName, submissions);
+    
+    if (aiResult.success) {
+      return {
+        roleName,
+        readinessScore: aiResult.data.confidenceLevel || 70,
+        explanation: `AI-powered analysis identifies your readiness for ${roleName} based on current skills and experience.`,
+        missingSkills: aiResult.data.missingSkills || [],
+        learningPath: aiResult.data.learningPath || [],
+        readinessTimeline: aiResult.data.readinessTimeline || 'Continue practicing to improve readiness'
+      };
+    }
+  } catch (error) {
+    console.error('AI Gap Analysis failed, using fallback:', error);
+  }
+  
+  // Fallback to original analysis
   const analysis = buildAnalysis(submissions);
-
   return {
     roleName,
     readinessScore: analysis.readinessScore,
@@ -543,7 +591,20 @@ export const saveResumeProfile = async ({
   resumeFileMime = '',
   resumeFileSize = 0,
 }) => {
-  return backendRequest('/api/profile/resume', {
+  // Perform AI resume analysis if resume text is provided
+  let aiAnalysis = null;
+  if (resumeText && resumeText.length > 100) {
+    try {
+      const aiResult = await analyzeResumeWithAI(resumeText, profile?.targetRole || '');
+      if (aiResult.success) {
+        aiAnalysis = aiResult.data;
+      }
+    } catch (error) {
+      console.error('AI Resume Analysis failed:', error);
+    }
+  }
+
+  const result = await backendRequest('/api/profile/resume', {
     method: 'PUT',
     body: JSON.stringify({
       profile,
@@ -552,8 +613,11 @@ export const saveResumeProfile = async ({
       resumeFileData,
       resumeFileMime,
       resumeFileSize,
+      aiAnalysis, // Include AI analysis in the saved profile
     }),
   });
+
+  return { ...result, aiAnalysis };
 };
 
 export const fetchNotifications = async () => {

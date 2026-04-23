@@ -8,6 +8,13 @@ import { Server } from "socket.io";
 import { LANGUAGES, SUPPORTED_LANGUAGES, executeCode } from "./utils/codeExecution.js";
 import { checkPlagiarism } from "./utils/plagiarism.js";
 import { buildCandidateSignals, calculateJobMatch } from "./services/jobMatchingService.js";
+import { 
+  analyzeCodeWithAI, 
+  getJobSuggestionsWithAI, 
+  analyzeSkillGapsWithAI, 
+  getCareerGuidanceWithAI,
+  analyzeResumeWithAI 
+} from "./services/aiService.js";
 
 // ── Validate env ──────────────────────────────────────────────────────────────
 const required = ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
@@ -575,9 +582,9 @@ app.get("/api/languages", (_req, res) => {
 
 // ── CODE EXECUTION — Judge0 ─────────────────────────────────────────────────
 // POST /api/run
-// Body: { language, code, stdin? }
+// Body: { language, code, stdin?, challengeData? }
 app.post("/api/run", codeLimiter, asyncRoute(async (req, res) => {
-  const { language, code, stdin = "" } = req.body;
+  const { language, code, stdin = "", challengeData } = req.body;
 
   if (!language || !SUPPORTED_LANGUAGES.includes(language)) {
     return res.status(400).json({
@@ -591,7 +598,7 @@ app.post("/api/run", codeLimiter, asyncRoute(async (req, res) => {
     return res.status(400).json({ error: "Code too large (max 50,000 chars)" });
   }
 
-  const result = await executeCode(language, code, stdin);
+  const result = await executeCode(language, code, stdin, challengeData);
   return res.json(result);
 }));
 
@@ -1590,6 +1597,137 @@ app.get("/api/company-tests/:id/my-progress", requireUser, asyncRoute(async (req
     },
     progress,
   });
+}));
+
+// ── AI ENDPOINTS ─────────────────────────────────────────────────────────────
+
+// POST /api/ai/analyze-code
+app.post("/api/ai/analyze-code", requireUser, asyncRoute(async (req, res) => {
+  const { code, language, challengeTitle } = req.body;
+  
+  if (!code || !language) {
+    return res.status(400).json({ error: "Code and language are required." });
+  }
+
+  const result = await analyzeCodeWithAI(code, language, challengeTitle || '');
+  
+  if (result.success) {
+    return res.json(result.data);
+  } else {
+    // Return fallback response if AI fails
+    return res.json(result.fallback);
+  }
+}));
+
+// POST /api/ai/job-suggestions
+app.post("/api/ai/job-suggestions", requireUser, asyncRoute(async (req, res) => {
+  const { userProfile, submissions } = req.body;
+  
+  const result = await getJobSuggestionsWithAI(userProfile || {}, submissions || []);
+  
+  if (result.success) {
+    return res.json(result.data);
+  } else {
+    return res.json(result.fallback);
+  }
+}));
+
+// POST /api/ai/skill-gaps
+app.post("/api/ai/skill-gaps", requireUser, asyncRoute(async (req, res) => {
+  const { userProfile, targetRole, submissions } = req.body;
+  
+  if (!targetRole) {
+    return res.status(400).json({ error: "Target role is required." });
+  }
+
+  const result = await analyzeSkillGapsWithAI(userProfile || {}, targetRole, submissions || []);
+  
+  if (result.success) {
+    return res.json(result.data);
+  } else {
+    return res.json(result.fallback);
+  }
+}));
+
+// POST /api/ai/career-guidance
+app.post("/api/ai/career-guidance", requireUser, asyncRoute(async (req, res) => {
+  const { userProfile, submissions } = req.body;
+  
+  const result = await getCareerGuidanceWithAI(userProfile || {}, submissions || []);
+  
+  if (result.success) {
+    return res.json(result.data);
+  } else {
+    return res.json(result.fallback);
+  }
+}));
+
+// POST /api/ai/analyze-resume
+app.post("/api/ai/analyze-resume", requireUser, asyncRoute(async (req, res) => {
+  const { resumeText, targetRole } = req.body;
+  
+  if (!resumeText) {
+    return res.status(400).json({ error: "resumeText is required" });
+  }
+  
+  const result = await analyzeResumeWithAI(resumeText, targetRole);
+  return res.json(result);
+}));
+
+// ── PROCTORING ENDPOINTS ─────────────────────────────────────────────────────
+
+// POST /api/proctoring
+// Body: { type: "NO_FACE" | "MULTIPLE_FACES" | "ABANDONED" | "TAB_SWITCH" | "COPY_PASTE" | "LARGE_PASTE_DETECTED" | "EXCESSIVE_COPY_PASTE" | "PLAGIARISM_DETECTED" | "EXCESSIVE_TAB_SWITCHING", details: object, timestamp: string }
+app.post("/api/proctoring", requireUser, asyncRoute(async (req, res) => {
+  const { type, details, timestamp } = req.body;
+  
+  if (!type || !timestamp) {
+    return res.status(400).json({ error: "type and timestamp are required" });
+  }
+  
+  // Log proctoring violation to database
+  try {
+    const { error } = await supabaseAdmin
+      .from("proctoring_logs")
+      .insert({
+        user_id: req.user.id,
+        violation_type: type,
+        violation_details: details || {},
+        timestamp: timestamp,
+        created_at: new Date().toISOString()
+      });
+    
+    if (error) {
+      console.warn("Failed to log proctoring violation:", error);
+    }
+  } catch (e) {
+    console.warn("Proctoring logging error:", e);
+  }
+  
+  return res.json({ success: true, logged: true, violationType: type });
+}));
+
+// GET /api/proctoring/logs/:userId
+app.get("/api/proctoring/logs/:userId", requireUser, asyncRoute(async (req, res) => {
+  const { userId } = req.params;
+  
+  // Users can only view their own logs unless they're recruiters
+  if (req.user.id !== userId && req.user.role !== 'recruiter') {
+    return res.status(403).json({ error: "Access denied" });
+  }
+  
+  const { data, error } = await supabaseAdmin
+    .from("proctoring_logs")
+    .select("*")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false })
+    .limit(100);
+  
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  
+  return res.json(data);
 }));
 
 app.use((error, _req, res, _next) => {

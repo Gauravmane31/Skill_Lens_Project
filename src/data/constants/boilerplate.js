@@ -15,7 +15,7 @@ int main() {
   java: `import java.util.*;
 import java.io.*;
 
-class Codechef {
+class Solution {
     public static void main(String[] args) throws Exception {
         // your code goes here
     }

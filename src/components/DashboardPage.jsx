@@ -96,29 +96,6 @@ function DashboardPage({results,user,setPage,setSelectedChallenge}){
           {/* LEFT */}
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
-            {/* Challenge Grid */}
-            <Card>
-              <SectionHeader title="All Hiring Tests" sub={`${completedIds.size}/${CHALLENGES.length} completed`} action={
-                <button onClick={()=>setPage("challenges")} style={{background:"none",border:"none",color:C.indigo,fontWeight:700,fontSize:13,cursor:"pointer"}}>See all →</button>
-              }/>
-              <div className="sl-grid-4">
-                {CHALLENGES.map(ch=>{
-                  const done=results.find(r=>r.challenge.id===ch.id);
-                  return(
-                    <div key={ch.id} className="sl-card-hover" onClick={()=>{setSelectedChallenge(ch);setPage("session");}}
-                      style={{background:done?C.indigoLight:C.bg,borderRadius:14,padding:"12px 10px",cursor:"pointer",position:"relative",border:`1.5px solid ${done?C.indigo+"40":C.border}`}}>
-                      {done&&<div style={{position:"absolute",top:6,right:6,width:17,height:17,background:C.indigo,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"#fff",fontWeight:800}}>✓</div>}
-                      <div style={{width:32,height:32,background:done?C.indigo+"20":C.white,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,marginBottom:7,border:`1px solid ${C.border}`}}>{ch.icon}</div>
-                      <div style={{fontWeight:800,fontSize:10,marginBottom:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:C.text}}>{ch.title}</div>
-                      <Badge label={ch.difficulty} color={ch.difficulty==="Easy"?C.green:ch.difficulty==="Medium"?C.amber:C.red}/>
-                      <div style={{fontSize:9,color:C.muted,marginTop:4}}>+{ch.xp} XP</div>
-                      {done&&<div style={{marginTop:6}}><ProgressBar value={done.codeScore} color={C.indigo} height={3}/></div>}
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-
             {/* Recent Results */}
             {results.length>0&&(
               <Card>

@@ -1,8 +1,14 @@
 // ============================================================
 // utils/codeExecution.js — Judge0 Code Execution Utilities
+// Synchronous mode (wait=true) — no polling required
 // ============================================================
 
-const JUDGE0_URL = "https://ce.judge0.com";
+import { wrapCodeForTesting } from './testRunner.js';
+
+const JUDGE0_INSTANCES = [
+  "https://ce.judge0.com",
+  "https://judge0.sda1.net",
+];
 
 export const SUPPORTED_LANGUAGES = ["cpp", "python", "java", "javascript", "c", "go", "rust"];
 
@@ -17,86 +23,50 @@ export const LANGUAGE_IDS = {
 };
 
 export const LANGUAGES = [
-  {
-    id: "cpp",
-    label: "C++",
-    version: "GCC 13",
-    icon: "⚡",
-    monacoId: "cpp",
-    ext: ".cpp",
-  },
-  {
-    id: "python",
-    label: "Python 3",
-    version: "3.12",
-    icon: "🐍",
-    monacoId: "python",
-    ext: ".py",
-  },
-  {
-    id: "java",
-    label: "Java",
-    version: "OpenJDK 21",
-    icon: "☕",
-    monacoId: "java",
-    ext: ".java",
-  },
-  {
-    id: "javascript",
-    label: "JavaScript",
-    version: "Node.js 20",
-    icon: "🟨",
-    monacoId: "javascript",
-    ext: ".js",
-  },
-  {
-    id: "c",
-    label: "C",
-    version: "GCC 9.2",
-    icon: "⚡",
-    monacoId: "c",
-    ext: ".c",
-  },
-  {
-    id: "go",
-    label: "Go",
-    version: "1.13",
-    icon: "🐹",
-    monacoId: "go",
-    ext: ".go",
-  },
-  {
-    id: "rust",
-    label: "Rust",
-    version: "1.40",
-    icon: "🦀",
-    monacoId: "rust",
-    ext: ".rs",
-  },
+  { id: "cpp",        label: "C++",        version: "GCC 13",    icon: "⚡", monacoId: "cpp",        ext: ".cpp" },
+  { id: "python",     label: "Python 3",   version: "3.12",      icon: "🐍", monacoId: "python",     ext: ".py"  },
+  { id: "java",       label: "Java",       version: "OpenJDK 21",icon: "☕", monacoId: "java",       ext: ".java"},
+  { id: "javascript", label: "JavaScript", version: "Node.js 20",icon: "🟨", monacoId: "javascript", ext: ".js"  },
+  { id: "c",          label: "C",          version: "GCC 9.2",   icon: "⚡", monacoId: "c",          ext: ".c"   },
+  { id: "go",         label: "Go",         version: "1.13",      icon: "🐹", monacoId: "go",         ext: ".go"  },
+  { id: "rust",       label: "Rust",       version: "1.40",      icon: "🦀", monacoId: "rust",       ext: ".rs"  },
 ];
 
 export const STATUS = {
-  1: { label: "Queued", error: false },
-  2: { label: "Processing", error: false },
-  3: { label: "Accepted", error: false },
-  4: { label: "Wrong Answer", error: true },
-  5: { label: "Time Limit Exceeded", error: true },
-  6: { label: "Compilation Error", error: true },
-  7: { label: "Runtime Error (SIGSEGV)", error: true },
-  8: { label: "Runtime Error (SIGFPE)", error: true },
-  9: { label: "Runtime Error (SIGABRT)", error: true },
-  10: { label: "Runtime Error (NZEC)", error: true },
-  11: { label: "Runtime Error (Other)", error: true },
-  12: { label: "Internal Error", error: true },
-  13: { label: "Exec Format Error", error: true },
+  1:  { label: "Queued",                   error: false },
+  2:  { label: "Processing",               error: false },
+  3:  { label: "Accepted",                 error: false },
+  4:  { label: "Wrong Answer",             error: true  },
+  5:  { label: "Time Limit Exceeded",      error: true  },
+  6:  { label: "Compilation Error",        error: true  },
+  7:  { label: "Runtime Error (SIGSEGV)",  error: true  },
+  8:  { label: "Runtime Error (SIGFPE)",   error: true  },
+  9:  { label: "Runtime Error (SIGABRT)",  error: true  },
+  10: { label: "Runtime Error (NZEC)",     error: true  },
+  11: { label: "Runtime Error (Other)",    error: true  },
+  12: { label: "Internal Error",           error: true  },
+  13: { label: "Exec Format Error",        error: true  },
 };
 
-export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function submitCode(language, code, stdin) {
-  const url = `${JUDGE0_URL}/submissions?base64_encoded=false&wait=false`;
+// ── Synchronous execution — result returned immediately ─────
+export async function executeCode(language, code, stdin, challengeData = null) {
+  const startTime = Date.now();
+
+  // If challenge data is provided, wrap the code with test runner
+  let finalCode = code;
+  if (challengeData && challengeData.testCases) {
+    try {
+      finalCode = wrapCodeForTesting(language, code, null, challengeData.testCases);
+    } catch (error) {
+      console.warn('[TestRunner] Failed to wrap code:', error.message);
+      // Fall back to original code if wrapping fails
+    }
+  }
+
   const body = {
-    source_code: code,
+    source_code: finalCode,
     language_id: LANGUAGE_IDS[language],
     stdin: stdin || "",
     cpu_time_limit: 10,
@@ -104,98 +74,73 @@ export async function submitCode(language, code, stdin) {
     wall_time_limit: 15,
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let lastError = null;
 
-  if (!res.ok) {
-    const text = await res.text();
-    console.error(`Judge0 Submit Error (${res.status}):`, text);
-    throw new Error(`Submit failed (${res.status}): ${text}`);
-  }
+  for (const baseUrl of JUDGE0_INSTANCES) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const url = `${baseUrl}/submissions?base64_encoded=false&wait=true&fields=stdout,stderr,compile_output,status,time,memory,message`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
 
-  const data = await res.json();
-  console.log("Judge0 Token Created:", data.token);
-  if (!data.token) {
-    throw new Error(`No token returned: ${JSON.stringify(data)}`);
-  }
-  return data.token;
-}
+        if (!res.ok) {
+          const text = await res.text();
+          lastError = `${baseUrl} returned ${res.status}: ${text}`;
+          console.warn(`[Judge0] ${lastError}`);
+          if (attempt < 2) await sleep(1500);
+          continue;
+        }
 
-export async function pollResult(token) {
-  const url = `${JUDGE0_URL}/submissions/${token}?base64_encoded=false&fields=stdout,stderr,compile_output,status,time,memory,message`;
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-  });
+        const result = await res.json();
+        console.log(`[Judge0] Success via ${baseUrl} | ${result.status?.description}`);
 
-  if (!res.ok) {
-    const text = await res.text();
-    console.error(`Judge0 Poll Error (${res.status}) for token ${token}:`, text);
-    throw new Error(`Poll failed (${res.status})`);
-  }
-  return await res.json();
-}
+        const statusId = result.status?.id;
+        const status = STATUS[statusId];
+        let finalOutput = "";
+        let isError = false;
 
-export async function executeCode(language, code, stdin) {
-  const startTime = Date.now();
-  let finalOutput = "";
-  let isError = false;
-  let timeStr = "0s";
-  let memStr = "0MB";
+        if (statusId === 3) {
+          finalOutput = result.stdout?.trim() || "(program ran successfully with no output)";
+          isError = false;
+        } else if (statusId === 6) {
+          finalOutput = result.compile_output?.trim() || "Compilation Error";
+          isError = true;
+        } else if (statusId === 5) {
+          finalOutput = `Time Limit Exceeded (${result.time || "?"}s)`;
+          isError = true;
+        } else {
+          finalOutput = [
+            result.stderr,
+            result.compile_output,
+            result.stdout,
+            result.message,
+            status?.label || "Unknown error",
+          ].filter(Boolean).map(s => s.trim()).filter(Boolean).join("\n") || "Unknown error";
+          isError = true;
+        }
 
-  try {
-    const token = await submitCode(language, code, stdin);
-    const POLL_INTERVAL = 1000;
-    const MAX_POLLS = 20;
-    let result = null;
+        return {
+          output: finalOutput,
+          error: isError,
+          time: result.time ? `${result.time}s` : `${((Date.now() - startTime) / 1000).toFixed(2)}s`,
+          memory: result.memory ? `${(result.memory / 1024).toFixed(1)}MB` : "—",
+        };
 
-    for (let i = 0; i < MAX_POLLS; i++) {
-      await sleep(POLL_INTERVAL);
-      result = await pollResult(token);
-      const statusId = result.status?.id;
-      if (statusId !== 1 && statusId !== 2) break;
+      } catch (err) {
+        lastError = err.message;
+        console.warn(`[Judge0] ${baseUrl} attempt ${attempt} error:`, err.message);
+        if (attempt < 2) await sleep(1500);
+      }
     }
-
-    if (!result) throw new Error("Timed out waiting for result");
-
-    const statusId = result.status?.id;
-    const status = STATUS[statusId];
-
-    if (statusId === 3) {
-      finalOutput = result.stdout?.trim() || "(program ran successfully with no output)";
-      isError = false;
-    } else if (statusId === 6) {
-      finalOutput = result.compile_output?.trim() || "Compilation Error";
-      isError = true;
-    } else if (statusId === 5) {
-      finalOutput = `Time Limit Exceeded (${result.time || "?"}s)`;
-      isError = true;
-    } else {
-      finalOutput = [
-        result.stderr,
-        result.compile_output,
-        result.stdout,
-        result.message,
-        status?.label || "Unknown error",
-      ].filter(Boolean).map(s => s.trim()).filter(Boolean).join("\n") || "Unknown error";
-      isError = true;
-    }
-
-    timeStr = result.time ? `${result.time}s` : `${((Date.now() - startTime) / 1000).toFixed(2)}s`;
-    memStr = result.memory ? `${(result.memory / 1024).toFixed(1)}MB` : "—";
-    
-  } catch (err) {
-    isError = true;
-    finalOutput = `Error executing code: ${err.message}`;
-    console.error("Execution error:", err.message);
   }
 
   return {
-    output: finalOutput,
-    error: isError,
-    time: timeStr,
-    memory: memStr
+    output: `Error: All Judge0 instances unavailable — ${lastError}`,
+    error: true,
+    time: "0s",
+    memory: "—",
   };
 }

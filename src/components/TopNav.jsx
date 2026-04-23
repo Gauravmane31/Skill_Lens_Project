@@ -11,7 +11,7 @@ function TopNav({ page, setPage, user, onLogout, notifications, markNotifsRead }
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: "🏠" },
     { id: "challenges", label: "Challenges", icon: "⌨️" },
-    { id: "companyTests", label: "My Tests", icon: "🧪" },
+    { id: "progress", label: "Progress", icon: "📈" },
     { id: "leaderboard", label: "Leaderboard", icon: "🏆" },
     { id: "jobs", label: "Job Board", icon: "💼" },
     { id: "notifications", label: "Notifications", icon: "🔔" },
