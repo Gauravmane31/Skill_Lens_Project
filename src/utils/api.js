@@ -1,54 +1,61 @@
-import { supabase } from './supabase.js';
-import { CHALLENGES } from '../data/constants/constants.js';
-import { aiAnalysis, jobSuggestions, skillGaps } from '../data/scoring.js';
-import { 
-  getJobSuggestionsWithAI, 
-  analyzeSkillGapsWithAI, 
-  getCareerGuidanceWithAI,
-  analyzeResumeWithAI 
-} from './aiApi.js';
+import { supabase } from "./supabase.js";
+import { CHALLENGES } from "../data/constants/constants.js";
+import { aiAnalysis, skillGaps } from "../data/scoring.js";
+import { getBackendBaseUrl } from "./runtimeConfig.js";
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+const BACKEND_URL = getBackendBaseUrl();
 
-const CHALLENGE_BY_ID = new Map(CHALLENGES.map((challenge) => [Number(challenge.id), challenge]));
-const CHALLENGE_BY_TITLE = new Map(CHALLENGES.map((challenge) => [challenge.title, challenge]));
+const CHALLENGE_BY_ID = new Map(
+  CHALLENGES.map((challenge) => [Number(challenge.id), challenge]),
+);
+const CHALLENGE_BY_TITLE = new Map(
+  CHALLENGES.map((challenge) => [challenge.title, challenge]),
+);
 const LEGACY_CHALLENGE_TITLES = new Set([
-  'Two Sum',
-  'Reverse Linked List',
-  'Binary Search',
-  'Valid Parentheses',
-  'Maximum Subarray',
-  'Climbing Stairs',
-  'Merge Two Sorted Lists',
-  'Best Time to Buy Stock',
-  'Longest Common Prefix',
-  'Number of Islands',
-  '3Sum',
-  'LRU Cache',
+  "Two Sum",
+  "Reverse Linked List",
+  "Binary Search",
+  "Valid Parentheses",
+  "Maximum Subarray",
+  "Climbing Stairs",
+  "Merge Two Sorted Lists",
+  "Best Time to Buy Stock",
+  "Longest Common Prefix",
+  "Number of Islands",
+  "3Sum",
+  "LRU Cache",
 ]);
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 const startOfDayUtc = (value) => {
   const date = new Date(value);
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
 };
 
 const dayDiff = (a, b) => {
   const msPerDay = 24 * 60 * 60 * 1000;
-  return Math.round((startOfDayUtc(a).getTime() - startOfDayUtc(b).getTime()) / msPerDay);
+  return Math.round(
+    (startOfDayUtc(a).getTime() - startOfDayUtc(b).getTime()) / msPerDay,
+  );
 };
 
 const normalizeChallenge = (challenge = {}) => {
-  const meta = CHALLENGE_BY_ID.get(Number(challenge.id)) || CHALLENGE_BY_TITLE.get(challenge.title);
+  const meta =
+    CHALLENGE_BY_ID.get(Number(challenge.id)) ||
+    CHALLENGE_BY_TITLE.get(challenge.title);
   const hasLegacyTitle = LEGACY_CHALLENGE_TITLES.has(challenge.title);
-  const title = hasLegacyTitle ? (meta?.title || challenge.title) : (challenge.title || meta?.title || 'Untitled Challenge');
+  const title = hasLegacyTitle
+    ? meta?.title || challenge.title
+    : challenge.title || meta?.title || "Untitled Challenge";
   const description = hasLegacyTitle
-    ? (meta?.description || challenge.description || 'No description available.')
-    : (challenge.description || meta?.description || 'No description available.');
+    ? meta?.description || challenge.description || "No description available."
+    : challenge.description || meta?.description || "No description available.";
   const domain = hasLegacyTitle
-    ? (meta?.category || challenge.domain || challenge.category || 'General')
-    : (challenge.domain || challenge.category || meta?.category || 'General');
+    ? meta?.category || challenge.domain || challenge.category || "General"
+    : challenge.domain || challenge.category || meta?.category || "General";
 
   return {
     ...meta,
@@ -58,25 +65,34 @@ const normalizeChallenge = (challenge = {}) => {
     description,
     domain,
     category: domain,
-    difficulty: hasLegacyTitle ? (meta?.difficulty || challenge.difficulty || 'Easy') : (challenge.difficulty || meta?.difficulty || 'Easy'),
+    difficulty: hasLegacyTitle
+      ? meta?.difficulty || challenge.difficulty || "Easy"
+      : challenge.difficulty || meta?.difficulty || "Easy",
     xp: Number(challenge.xp ?? meta?.xp ?? 100),
-    timeLimit: Number(challenge.timeLimit ?? challenge.time_limit ?? meta?.timeLimit ?? 30),
-    starterCode: challenge.starterCode || challenge.starter_code || meta?.starterCode || {},
-    testCases: challenge.testCases || challenge.test_cases || meta?.testCases || [],
+    timeLimit: Number(
+      challenge.timeLimit ?? challenge.time_limit ?? meta?.timeLimit ?? 30,
+    ),
+    starterCode:
+      challenge.starterCode ||
+      challenge.starter_code ||
+      meta?.starterCode ||
+      {},
+    testCases:
+      challenge.testCases || challenge.test_cases || meta?.testCases || [],
     hints: challenge.hints || meta?.hints || [],
     tags: challenge.tags || meta?.tags || [domain],
   };
 };
 
 const mapWeaknessToSkill = (weakness) => {
-  const value = (weakness || '').toLowerCase();
-  if (value.includes('array')) return 'Arrays and Hashing';
-  if (value.includes('dynamic')) return 'Dynamic Programming';
-  if (value.includes('graph')) return 'Graphs and Traversals';
-  if (value.includes('time complexity')) return 'Complexity Analysis';
-  if (value.includes('edge case')) return 'Edge-Case Testing';
-  if (value.includes('error handling')) return 'Robust Error Handling';
-  return 'Problem Solving Fundamentals';
+  const value = (weakness || "").toLowerCase();
+  if (value.includes("array")) return "Arrays and Hashing";
+  if (value.includes("dynamic")) return "Dynamic Programming";
+  if (value.includes("graph")) return "Graphs and Traversals";
+  if (value.includes("time complexity")) return "Complexity Analysis";
+  if (value.includes("edge case")) return "Edge-Case Testing";
+  if (value.includes("error handling")) return "Robust Error Handling";
+  return "Problem Solving Fundamentals";
 };
 
 const buildAnalysis = (submissions = []) => {
@@ -85,25 +101,39 @@ const buildAnalysis = (submissions = []) => {
       avgCode: 0,
       avgIntegrity: 0,
       confidenceScore: 40,
-      recommendedRoles: ['Intern / Trainee'],
-      weaknesses: ['General'],
-      strengths: ['Keep solving challenges to unlock detailed strengths.'],
-      growthPath: 'Complete at least 3 coding sessions to unlock better career recommendations.',
-      reasoning: 'Not enough submission data yet. Continue coding to build your profile.',
+      recommendedRoles: ["Intern / Trainee"],
+      weaknesses: ["General"],
+      strengths: ["Keep solving challenges to unlock detailed strengths."],
+      growthPath:
+        "Complete at least 3 coding sessions to unlock better career recommendations.",
+      reasoning:
+        "Not enough submission data yet. Continue coding to build your profile.",
       readinessScore: 35,
       consistencyScore: 35,
       momentumScore: 35,
     };
   }
 
-  const avgCode = Math.round(submissions.reduce((sum, item) => sum + Number(item.code_score || 0), 0) / submissions.length);
-  const avgIntegrity = Math.round(submissions.reduce((sum, item) => sum + Number(item.integrity_score || 0), 0) / submissions.length);
-  const confidenceScore = clamp(Math.round(avgCode * 0.7 + avgIntegrity * 0.3), 0, 100);
+  const avgCode = Math.round(
+    submissions.reduce((sum, item) => sum + Number(item.code_score || 0), 0) /
+      submissions.length,
+  );
+  const avgIntegrity = Math.round(
+    submissions.reduce(
+      (sum, item) => sum + Number(item.integrity_score || 0),
+      0,
+    ) / submissions.length,
+  );
+  const confidenceScore = clamp(
+    Math.round(avgCode * 0.7 + avgIntegrity * 0.3),
+    0,
+    100,
+  );
 
   const categoryMap = new Map();
   submissions.forEach((submission) => {
     const challenge = CHALLENGE_BY_ID.get(Number(submission.challenge_id));
-    const category = challenge?.category || 'General';
+    const category = challenge?.category || "General";
     const current = categoryMap.get(category) || { total: 0, count: 0 };
     current.total += Number(submission.code_score || 0);
     current.count += 1;
@@ -111,32 +141,52 @@ const buildAnalysis = (submissions = []) => {
   });
 
   const sortedCategories = Array.from(categoryMap.entries())
-    .map(([category, values]) => ({ category, avg: values.total / values.count }))
+    .map(([category, values]) => ({
+      category,
+      avg: values.total / values.count,
+    }))
     .sort((a, b) => a.avg - b.avg);
 
-  const weaknesses = sortedCategories.slice(0, 3).map((entry) => entry.category);
-  const roleSuggestions = jobSuggestions(avgCode, avgIntegrity);
-  const recommendedRoles = roleSuggestions.map((role) => role.role);
-  const strengths = aiAnalysis(avgCode).strengths;
+  const weaknesses = sortedCategories
+    .slice(0, 3)
+    .map((entry) => entry.category);
+  const recommendedRoles =
+    avgCode >= 80
+      ? ["Backend Developer", "Full-Stack Engineer", "Software Engineer II"]
+      : avgCode >= 65
+        ? ["Junior Developer", "Frontend Developer", "QA Engineer"]
+        : ["Intern / Trainee", "Technical Support"];
+  const strengths =
+    avgCode >= 80
+      ? ["Strong coding fundamentals", "Good problem decomposition"]
+      : avgCode >= 65
+        ? ["Consistent attempt quality", "Building solid momentum"]
+        : ["Keep solving challenges", "Focus on fundamentals"];
 
   const recent = submissions.slice(0, 5);
   const previous = submissions.slice(5, 10);
   const recentAvg = recent.length
-    ? recent.reduce((sum, item) => sum + Number(item.code_score || 0), 0) / recent.length
+    ? recent.reduce((sum, item) => sum + Number(item.code_score || 0), 0) /
+      recent.length
     : avgCode;
   const previousAvg = previous.length
-    ? previous.reduce((sum, item) => sum + Number(item.code_score || 0), 0) / previous.length
+    ? previous.reduce((sum, item) => sum + Number(item.code_score || 0), 0) /
+      previous.length
     : recentAvg;
 
   const momentumScore = clamp(50 + (recentAvg - previousAvg), 0, 100);
   const variance = recent.length
     ? recent.reduce((sum, item) => {
-      const score = Number(item.code_score || 0);
-      return sum + Math.pow(score - recentAvg, 2);
-    }, 0) / recent.length
+        const score = Number(item.code_score || 0);
+        return sum + Math.pow(score - recentAvg, 2);
+      }, 0) / recent.length
     : 0;
   const consistencyScore = clamp(Math.round(100 - Math.sqrt(variance)), 0, 100);
-  const readinessScore = clamp(Math.round((avgCode + avgIntegrity + momentumScore) / 3), 0, 100);
+  const readinessScore = clamp(
+    Math.round((avgCode + avgIntegrity + momentumScore) / 3),
+    0,
+    100,
+  );
 
   return {
     avgCode,
@@ -147,10 +197,10 @@ const buildAnalysis = (submissions = []) => {
     strengths,
     growthPath:
       confidenceScore >= 80
-        ? 'You are close to interview-ready. Focus on system design and production-grade practices.'
+        ? "You are close to interview-ready. Focus on system design and production-grade practices."
         : confidenceScore >= 65
-          ? 'Build consistency with medium-level problems and improve edge-case handling.'
-          : 'Strengthen fundamentals with easy and medium problems before attempting advanced topics.',
+          ? "Build consistency with medium-level problems and improve edge-case handling."
+          : "Strengthen fundamentals with easy and medium problems before attempting advanced topics.",
     reasoning: `Based on ${submissions.length} submissions, your average code score is ${avgCode} and integrity is ${avgIntegrity}.`,
     readinessScore,
     consistencyScore,
@@ -165,7 +215,7 @@ const ensureAuthenticatedUser = async () => {
   } = await supabase.auth.getUser();
 
   if (error || !user) {
-    throw new Error('You must be logged in to use this feature.');
+    throw new Error("You must be logged in to use this feature.");
   }
 
   return user;
@@ -177,15 +227,15 @@ const getAccessToken = async () => {
   } = await supabase.auth.getSession();
 
   if (!session?.access_token) {
-    throw new Error('No active session found. Please log in again.');
+    throw new Error("No active session found. Please log in again.");
   }
 
   return session.access_token;
 };
 
-const normalizeRole = (role = '') => {
-  const value = String(role || '').toLowerCase();
-  return value === 'recruiter' ? 'recruiter' : 'student';
+const normalizeRole = (role = "") => {
+  const value = String(role || "").toLowerCase();
+  return value === "recruiter" ? "recruiter" : "student";
 };
 
 const backendRequest = async (path, options = {}) => {
@@ -193,7 +243,7 @@ const backendRequest = async (path, options = {}) => {
   const response = await fetch(`${BACKEND_URL}${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
       ...(options.headers || {}),
     },
@@ -201,7 +251,9 @@ const backendRequest = async (path, options = {}) => {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload?.error || `Request failed with status ${response.status}`);
+    throw new Error(
+      payload?.error || `Request failed with status ${response.status}`,
+    );
   }
 
   return payload;
@@ -209,23 +261,29 @@ const backendRequest = async (path, options = {}) => {
 
 const authRequest = async (path, body) => {
   const response = await fetch(`${BACKEND_URL}${path}`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(body || {}),
   });
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload?.error || `Authentication failed with status ${response.status}`);
+    throw new Error(
+      payload?.error || `Authentication failed with status ${response.status}`,
+    );
   }
 
   return payload;
 };
 
 export const signupWithEmail = async ({ name, email, password }) => {
-  const payload = await authRequest('/api/auth/signup', { name, email, password });
+  const payload = await authRequest("/api/auth/signup", {
+    name,
+    email,
+    password,
+  });
 
   if (payload?.accessToken && payload?.refreshToken) {
     const { error } = await supabase.auth.setSession({
@@ -234,7 +292,9 @@ export const signupWithEmail = async ({ name, email, password }) => {
     });
 
     if (error) {
-      throw new Error(error.message || 'Failed to create session after sign-up.');
+      throw new Error(
+        error.message || "Failed to create session after sign-up.",
+      );
     }
   }
 
@@ -242,7 +302,7 @@ export const signupWithEmail = async ({ name, email, password }) => {
 };
 
 export const loginWithEmail = async ({ email, password }) => {
-  const payload = await authRequest('/api/auth/login', { email, password });
+  const payload = await authRequest("/api/auth/login", { email, password });
 
   const { error } = await supabase.auth.setSession({
     access_token: payload.accessToken,
@@ -250,7 +310,7 @@ export const loginWithEmail = async ({ email, password }) => {
   });
 
   if (error) {
-    throw new Error(error.message || 'Failed to create session after login.');
+    throw new Error(error.message || "Failed to create session after login.");
   }
 
   return payload;
@@ -258,8 +318,13 @@ export const loginWithEmail = async ({ email, password }) => {
 
 const ensureProfile = async (user, overrides = {}) => {
   const name = overrides.name || user.user_metadata?.full_name || user.email;
-  const avatar = overrides.avatar || user.user_metadata?.avatar_url || (name ? name.charAt(0).toUpperCase() : 'U');
-  const role = normalizeRole(overrides.role || user.user_metadata?.role || 'student');
+  const avatar =
+    overrides.avatar ||
+    user.user_metadata?.avatar_url ||
+    (name ? name.charAt(0).toUpperCase() : "U");
+  const role = normalizeRole(
+    overrides.role || user.user_metadata?.role || "student",
+  );
 
   const upsertPayload = {
     id: user.id,
@@ -271,9 +336,9 @@ const ensureProfile = async (user, overrides = {}) => {
   };
 
   const { data, error } = await supabase
-    .from('profiles')
-    .upsert(upsertPayload, { onConflict: 'id' })
-    .select('*')
+    .from("profiles")
+    .upsert(upsertPayload, { onConflict: "id" })
+    .select("*")
     .single();
 
   if (error) {
@@ -285,10 +350,10 @@ const ensureProfile = async (user, overrides = {}) => {
 
 const fetchUserSubmissions = async (userId, limit = 50) => {
   const { data, error } = await supabase
-    .from('submissions')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+    .from("submissions")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (error) {
@@ -298,8 +363,11 @@ const fetchUserSubmissions = async (userId, limit = 50) => {
   return data || [];
 };
 
-export const fetchProblems = async (domain = '') => {
-  const { data, error } = await supabase.from('challenges').select('*').order('id', { ascending: true });
+export const fetchProblems = async (domain = "") => {
+  const { data, error } = await supabase
+    .from("challenges")
+    .select("*")
+    .order("id", { ascending: true });
 
   const sourceChallenges = error || !data?.length ? CHALLENGES : data;
   const challenges = sourceChallenges.map(normalizeChallenge);
@@ -308,15 +376,17 @@ export const fetchProblems = async (domain = '') => {
     return challenges;
   }
 
-  return challenges.filter((item) => item.domain === domain || item.category === domain);
+  return challenges.filter(
+    (item) => item.domain === domain || item.category === domain,
+  );
 };
 
 export const fetchProblemById = async (id) => {
   const normalizedId = Number(id);
   const { data, error } = await supabase
-    .from('challenges')
-    .select('*')
-    .eq('id', normalizedId)
+    .from("challenges")
+    .select("*")
+    .eq("id", normalizedId)
     .maybeSingle();
 
   if (error) {
@@ -331,17 +401,23 @@ export const fetchProblemById = async (id) => {
   return normalizeChallenge(fallback || {});
 };
 
-export const syncUserProfile = async (_userId, _email, name = '', avatar = '', role = 'student') => {
+export const syncUserProfile = async (
+  _userId,
+  _email,
+  name = "",
+  avatar = "",
+  role = "student",
+) => {
   const user = await ensureAuthenticatedUser();
   return ensureProfile(user, { name, avatar, role });
 };
 
 export const setUserRole = async (role) => {
-  const payload = await backendRequest('/api/profile/role', {
-    method: 'PUT',
+  const payload = await backendRequest("/api/profile/role", {
+    method: "PUT",
     body: JSON.stringify({ role: normalizeRole(role) }),
   });
-  return payload?.role || 'student';
+  return payload?.role || "student";
 };
 
 export const submitCode = async (payload) => {
@@ -352,8 +428,8 @@ export const submitCode = async (payload) => {
   const codeScore = Number(payload.codeScore ?? 0);
   const integrityScore = Number(payload.integrityScore ?? 0);
   const timeTaken = Number(payload.timeTaken ?? 0);
-  const lang = payload.lang || payload.language || 'javascript';
-  const code = payload.code || '';
+  const lang = payload.lang || payload.language || "javascript";
+  const code = payload.code || "";
   const metrics = payload.metrics || {
     keystrokes: 0,
     pasteEvents: 0,
@@ -364,7 +440,8 @@ export const submitCode = async (payload) => {
   };
 
   const challenge = CHALLENGE_BY_ID.get(challengeId);
-  const challengeTitle = payload.challengeTitle || challenge?.title || 'Challenge';
+  const challengeTitle =
+    payload.challengeTitle || challenge?.title || "Challenge";
   const createdAt = new Date().toISOString();
 
   const insertPayload = {
@@ -380,17 +457,19 @@ export const submitCode = async (payload) => {
     created_at: createdAt,
   };
 
-  const { error: insertError } = await supabase.from('submissions').insert(insertPayload);
+  const { error: insertError } = await supabase
+    .from("submissions")
+    .insert(insertPayload);
   if (insertError) {
     throw insertError;
   }
 
   const { data: latestSubmissionBeforeCurrent } = await supabase
-    .from('submissions')
-    .select('created_at')
-    .eq('user_id', user.id)
-    .lt('created_at', createdAt)
-    .order('created_at', { ascending: false })
+    .from("submissions")
+    .select("created_at")
+    .eq("user_id", user.id)
+    .lt("created_at", createdAt)
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -412,9 +491,13 @@ export const submitCode = async (payload) => {
   const nextPoints = Number(profile.points || 0) + pointsEarned;
 
   const { error: updateError } = await supabase
-    .from('profiles')
-    .update({ points: nextPoints, streak: nextStreak, updated_at: new Date().toISOString() })
-    .eq('id', user.id);
+    .from("profiles")
+    .update({
+      points: nextPoints,
+      streak: nextStreak,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", user.id);
 
   if (updateError) {
     throw updateError;
@@ -426,9 +509,9 @@ export const submitCode = async (payload) => {
     strengths: ai.strengths,
     weaknesses: ai.improvements,
     improvementTips: ai.improvements,
-    conceptGaps: await skillGaps(codeScore, { skills: [] }, ''),
+    conceptGaps: await skillGaps(codeScore, { skills: [] }, ""),
     complexity: ai.complexity,
-    suggestions: ai.suggestions
+    suggestions: ai.suggestions,
   };
 };
 
@@ -453,25 +536,35 @@ export const fetchCareerGuidance = async () => {
   const user = await ensureAuthenticatedUser();
   const submissions = await fetchUserSubmissions(user.id, 50);
   const profile = await ensureProfile(user);
-  
+
   try {
     // Try AI-powered career guidance first
+    const { getCareerGuidanceWithAI } = await import("./aiApi.js");
     const aiResult = await getCareerGuidanceWithAI(profile, submissions);
-    
+
     if (aiResult.success) {
       return {
-        recommendedRoles: aiResult.data.targetCompanies ? [aiResult.data.currentLevel] : ['Software Developer'],
+        recommendedRoles: aiResult.data.targetCompanies
+          ? [aiResult.data.currentLevel]
+          : ["Software Developer"],
         confidenceScore: aiResult.data.marketReadiness || 70,
-        reasoning: aiResult.data.overallAssessment || 'Based on your performance and skills',
-        growthPath: aiResult.data.longTermVision || 'Continue developing technical skills',
-        nextSteps: aiResult.data.nextSteps || ['Keep practicing', 'Build projects'],
-        marketReadiness: aiResult.data.marketReadiness || 70
+        reasoning:
+          aiResult.data.overallAssessment ||
+          "Based on your performance and skills",
+        growthPath:
+          aiResult.data.longTermVision ||
+          "Continue developing technical skills",
+        nextSteps: aiResult.data.nextSteps || [
+          "Keep practicing",
+          "Build projects",
+        ],
+        marketReadiness: aiResult.data.marketReadiness || 70,
       };
     }
   } catch (error) {
-    console.error('AI Career Guidance failed, using fallback:', error);
+    console.error("AI Career Guidance failed, using fallback:", error);
   }
-  
+
   // Fallback to original analysis
   const analysis = buildAnalysis(submissions);
   return {
@@ -482,15 +575,20 @@ export const fetchCareerGuidance = async () => {
   };
 };
 
-export const fetchGapAnalysis = async (_userId, roleName = 'Target Role') => {
+export const fetchGapAnalysis = async (_userId, roleName = "Target Role") => {
   const user = await ensureAuthenticatedUser();
   const submissions = await fetchUserSubmissions(user.id, 50);
   const profile = await ensureProfile(user);
-  
+
   try {
     // Try AI-powered skill gap analysis first
-    const aiResult = await analyzeSkillGapsWithAI(profile, roleName, submissions);
-    
+    const { analyzeSkillGapsWithAI } = await import("./aiApi.js");
+    const aiResult = await analyzeSkillGapsWithAI(
+      profile,
+      roleName,
+      submissions,
+    );
+
     if (aiResult.success) {
       return {
         roleName,
@@ -498,13 +596,15 @@ export const fetchGapAnalysis = async (_userId, roleName = 'Target Role') => {
         explanation: `AI-powered analysis identifies your readiness for ${roleName} based on current skills and experience.`,
         missingSkills: aiResult.data.missingSkills || [],
         learningPath: aiResult.data.learningPath || [],
-        readinessTimeline: aiResult.data.readinessTimeline || 'Continue practicing to improve readiness'
+        readinessTimeline:
+          aiResult.data.readinessTimeline ||
+          "Continue practicing to improve readiness",
       };
     }
   } catch (error) {
-    console.error('AI Gap Analysis failed, using fallback:', error);
+    console.error("AI Gap Analysis failed, using fallback:", error);
   }
-  
+
   // Fallback to original analysis
   const analysis = buildAnalysis(submissions);
   return {
@@ -523,17 +623,18 @@ export const fetchLearningPath = async () => {
   const recommendations = analysis.weaknesses.flatMap((weakness, index) => [
     {
       title: `${weakness} Deep Practice`,
-      type: index === 0 ? 'priority' : 'practice',
+      type: index === 0 ? "priority" : "practice",
       reason: `Focus area identified from your recent submissions in ${weakness}.`,
       reasonTemplate: `Practice more ${weakness} problems to improve your confidence and speed.`,
-      url: 'https://neetcode.io/roadmap',
+      url: "https://neetcode.io/roadmap",
     },
     {
       title: `${mapWeaknessToSkill(weakness)} Fundamentals`,
-      type: 'learning',
+      type: "learning",
       reason: `Strengthen theoretical understanding to avoid repeated mistakes in ${weakness}.`,
-      reasonTemplate: 'Review core concepts and then solve 3-5 targeted challenges.',
-      url: 'https://www.geeksforgeeks.org/explore?page=1&sortBy=submissions',
+      reasonTemplate:
+        "Review core concepts and then solve 3-5 targeted challenges.",
+      url: "https://www.geeksforgeeks.org/explore?page=1&sortBy=submissions",
     },
   ]);
 
@@ -557,17 +658,26 @@ export const fetchProgressInsights = async () => {
   const previous = submissions.slice(5, 10);
 
   const recentAverageScore = Math.round(
-    recent.reduce((sum, item) => sum + Number(item.code_score || 0), 0) / recent.length,
+    recent.reduce((sum, item) => sum + Number(item.code_score || 0), 0) /
+      recent.length,
   );
   const previousAverageScore = previous.length
-    ? Math.round(previous.reduce((sum, item) => sum + Number(item.code_score || 0), 0) / previous.length)
+    ? Math.round(
+        previous.reduce((sum, item) => sum + Number(item.code_score || 0), 0) /
+          previous.length,
+      )
     : recentAverageScore;
 
-  const momentumScore = clamp(50 + (recentAverageScore - previousAverageScore), 0, 100);
-  const variance = recent.reduce((sum, item) => {
-    const score = Number(item.code_score || 0);
-    return sum + Math.pow(score - recentAverageScore, 2);
-  }, 0) / recent.length;
+  const momentumScore = clamp(
+    50 + (recentAverageScore - previousAverageScore),
+    0,
+    100,
+  );
+  const variance =
+    recent.reduce((sum, item) => {
+      const score = Number(item.code_score || 0);
+      return sum + Math.pow(score - recentAverageScore, 2);
+    }, 0) / recent.length;
   const consistencyScore = clamp(Math.round(100 - Math.sqrt(variance)), 0, 100);
 
   return {
@@ -579,33 +689,39 @@ export const fetchProgressInsights = async () => {
 };
 
 export const loadResumeProfile = async () => {
-  const payload = await backendRequest('/api/profile/resume', { method: 'GET' });
+  const payload = await backendRequest("/api/profile/resume", {
+    method: "GET",
+  });
   return payload?.profile || null;
 };
 
 export const saveResumeProfile = async ({
   profile,
-  resumeText = '',
-  resumeFileName = '',
-  resumeFileData = '',
-  resumeFileMime = '',
+  resumeText = "",
+  resumeFileName = "",
+  resumeFileData = "",
+  resumeFileMime = "",
   resumeFileSize = 0,
 }) => {
   // Perform AI resume analysis if resume text is provided
   let aiAnalysis = null;
   if (resumeText && resumeText.length > 100) {
     try {
-      const aiResult = await analyzeResumeWithAI(resumeText, profile?.targetRole || '');
+      const { analyzeResumeWithAI } = await import("./aiApi.js");
+      const aiResult = await analyzeResumeWithAI(
+        resumeText,
+        profile?.targetRole || "",
+      );
       if (aiResult.success) {
         aiAnalysis = aiResult.data;
       }
     } catch (error) {
-      console.error('AI Resume Analysis failed:', error);
+      console.error("AI Resume Analysis failed:", error);
     }
   }
 
-  const result = await backendRequest('/api/profile/resume', {
-    method: 'PUT',
+  const result = await backendRequest("/api/profile/resume", {
+    method: "PUT",
     body: JSON.stringify({
       profile,
       resumeText,
@@ -621,61 +737,76 @@ export const saveResumeProfile = async ({
 };
 
 export const fetchNotifications = async () => {
-  const payload = await backendRequest('/api/notifications', { method: 'GET' });
+  const payload = await backendRequest("/api/notifications", { method: "GET" });
   return Array.isArray(payload?.notifications) ? payload.notifications : [];
 };
 
 export const markNotificationsRead = async (ids = []) => {
-  await backendRequest('/api/notifications/read', {
-    method: 'POST',
+  await backendRequest("/api/notifications/read", {
+    method: "POST",
     body: JSON.stringify({ ids }),
   });
   return true;
 };
 
 export const fetchJobs = async () => {
-  const payload = await backendRequest('/api/jobs', { method: 'GET' });
+  const payload = await backendRequest("/api/jobs", { method: "GET" });
   return Array.isArray(payload?.jobs) ? payload.jobs : [];
 };
 
 export const createJob = async (jobPayload) => {
-  return backendRequest('/api/jobs', {
-    method: 'POST',
+  return backendRequest("/api/jobs", {
+    method: "POST",
     body: JSON.stringify(jobPayload || {}),
   });
 };
 
 export const fetchJobRecommendations = async () => {
-  const payload = await backendRequest('/api/jobs/recommendations/me', { method: 'GET' });
+  const payload = await backendRequest("/api/jobs/recommendations/me", {
+    method: "GET",
+  });
   return Array.isArray(payload?.recommendations) ? payload.recommendations : [];
 };
 
-export const fetchRecruiterCandidates = async ({ domain = '', minSkillScore = 0, minReadiness = 0 } = {}) => {
+export const fetchRecruiterCandidates = async ({
+  domain = "",
+  minSkillScore = 0,
+  minReadiness = 0,
+} = {}) => {
   const query = new URLSearchParams();
-  if (domain) query.set('domain', domain);
-  if (Number(minSkillScore) > 0) query.set('minSkillScore', String(Number(minSkillScore)));
-  if (Number(minReadiness) > 0) query.set('minReadiness', String(Number(minReadiness)));
+  if (domain) query.set("domain", domain);
+  if (Number(minSkillScore) > 0)
+    query.set("minSkillScore", String(Number(minSkillScore)));
+  if (Number(minReadiness) > 0)
+    query.set("minReadiness", String(Number(minReadiness)));
 
-  const suffix = query.toString() ? `?${query.toString()}` : '';
-  const payload = await backendRequest(`/api/recruiter/candidates${suffix}`, { method: 'GET' });
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const payload = await backendRequest(`/api/recruiter/candidates${suffix}`, {
+    method: "GET",
+  });
   return Array.isArray(payload?.candidates) ? payload.candidates : [];
 };
 
 export const createRecruiterTest = async (testPayload) => {
-  return backendRequest('/api/recruiter/tests', {
-    method: 'POST',
+  return backendRequest("/api/recruiter/tests", {
+    method: "POST",
     body: JSON.stringify(testPayload || {}),
   });
 };
 
 export const fetchRecruiterTests = async ({ mine = true } = {}) => {
-  const suffix = mine ? '?mine=1' : '?mine=0';
-  const payload = await backendRequest(`/api/recruiter/tests${suffix}`, { method: 'GET' });
+  const suffix = mine ? "?mine=1" : "?mine=0";
+  const payload = await backendRequest(`/api/recruiter/tests${suffix}`, {
+    method: "GET",
+  });
   return Array.isArray(payload?.tests) ? payload.tests : [];
 };
 
 export const fetchRecruiterTestLeaderboard = async (testId) => {
-  const payload = await backendRequest(`/api/recruiter/tests/${testId}/leaderboard`, { method: 'GET' });
+  const payload = await backendRequest(
+    `/api/recruiter/tests/${testId}/leaderboard`,
+    { method: "GET" },
+  );
   return {
     test: payload?.test || null,
     leaderboard: Array.isArray(payload?.leaderboard) ? payload.leaderboard : [],
@@ -684,53 +815,66 @@ export const fetchRecruiterTestLeaderboard = async (testId) => {
 
 export const updateRecruiterTest = async (testId, updates) => {
   return backendRequest(`/api/recruiter/tests/${testId}`, {
-    method: 'PUT',
+    method: "PUT",
     body: JSON.stringify(updates || {}),
   });
 };
 
 export const deleteRecruiterTest = async (testId) => {
   return backendRequest(`/api/recruiter/tests/${testId}`, {
-    method: 'DELETE',
+    method: "DELETE",
   });
 };
 
 export const assignRecruiterTestCandidates = async (testId, userIds = []) => {
   return backendRequest(`/api/recruiter/tests/${testId}/assignments`, {
-    method: 'POST',
+    method: "POST",
     body: JSON.stringify({ userIds }),
   });
 };
 
 export const fetchRecruiterTestAssignments = async (testId) => {
-  const payload = await backendRequest(`/api/recruiter/tests/${testId}/assignments`, { method: 'GET' });
+  const payload = await backendRequest(
+    `/api/recruiter/tests/${testId}/assignments`,
+    { method: "GET" },
+  );
   return Array.isArray(payload?.assignments) ? payload.assignments : [];
 };
 
 export const downloadRecruiterTestLeaderboardCsv = async (testId) => {
   const token = await getAccessToken();
-  const response = await fetch(`${BACKEND_URL}/api/recruiter/tests/${testId}/leaderboard?format=csv`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
+  const response = await fetch(
+    `${BACKEND_URL}/api/recruiter/tests/${testId}/leaderboard?format=csv`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload?.error || `Request failed with status ${response.status}`);
+    throw new Error(
+      payload?.error || `Request failed with status ${response.status}`,
+    );
   }
 
   return response.text();
 };
 
 export const fetchMyAssignedCompanyTests = async () => {
-  const payload = await backendRequest('/api/company-tests/me', { method: 'GET' });
+  const payload = await backendRequest("/api/company-tests/me", {
+    method: "GET",
+  });
   return Array.isArray(payload?.tests) ? payload.tests : [];
 };
 
 export const fetchMyCompanyTestProgress = async (testId) => {
-  const payload = await backendRequest(`/api/company-tests/${testId}/my-progress`, { method: 'GET' });
+  const payload = await backendRequest(
+    `/api/company-tests/${testId}/my-progress`,
+    { method: "GET" },
+  );
   return {
     test: payload?.test || null,
     progress: payload?.progress || null,

@@ -8,8 +8,7 @@
     "dev": "vite",
     "frontend:dev": "vite",
     "backend:dev": "cd backend && npm run dev",
-    "compiler:dev": "cd online-compiler && npm run dev",
-    "dev:all": "concurrently -k -n frontend,backend,compiler -c cyan,yellow,green \"npm run frontend:dev\" \"npm run backend:dev\" \"npm run compiler:dev\"",
+    "dev:all": "concurrently -k -n frontend,backend -c cyan,yellow \"npm run frontend:dev\" \"npm run backend:dev\"",
     "build": "vite build",
     "preview": "vite preview"
   },

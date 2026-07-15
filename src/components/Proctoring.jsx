@@ -1,20 +1,26 @@
 import React, { useRef, useEffect, useState } from "react";
 import Webcam from "react-webcam";
-import * as faceapi from "face-api.js";
 
 const Proctoring = ({ onViolation }) => {
   const webcamRef = useRef(null);
+  const faceApiRef = useRef(null);
+  const lastViolationRef = useRef(null);
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [status, setStatus] = useState("loading");
 
   // Draggable state
-  const [position, setPosition] = useState({ x: window.innerWidth - 260, y: 20 });
+  const [position, setPosition] = useState({
+    x: window.innerWidth - 260,
+    y: 20,
+  });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   // Load models
   useEffect(() => {
     const loadModels = async () => {
+      const faceapi = await import("face-api.js");
+      faceApiRef.current = faceapi;
       await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
       await faceapi.nets.faceLandmark68Net.loadFromUri("/models"); // needed for direction detection
       setModelsLoaded(true);
@@ -28,7 +34,7 @@ const Proctoring = ({ onViolation }) => {
     setIsDragging(true);
     setDragStart({
       x: e.clientX - position.x,
-      y: e.clientY - position.y
+      y: e.clientY - position.y,
     });
     e.preventDefault();
   };
@@ -36,8 +42,14 @@ const Proctoring = ({ onViolation }) => {
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isDragging) return;
-      const newX = Math.max(0, Math.min(window.innerWidth - 240, e.clientX - dragStart.x));
-      const newY = Math.max(0, Math.min(window.innerHeight - 200, e.clientY - dragStart.y));
+      const newX = Math.max(
+        0,
+        Math.min(window.innerWidth - 240, e.clientX - dragStart.x),
+      );
+      const newY = Math.max(
+        0,
+        Math.min(window.innerHeight - 200, e.clientY - dragStart.y),
+      );
       setPosition({ x: newX, y: newY });
     };
     const handleMouseUp = () => setIsDragging(false);
@@ -55,6 +67,15 @@ const Proctoring = ({ onViolation }) => {
   // Face + direction detection loop
   useEffect(() => {
     if (!modelsLoaded || !webcamRef.current) return;
+    const faceapi = faceApiRef.current;
+    if (!faceapi) return;
+
+    const emitViolation = (nextStatus, reason) => {
+      if (lastViolationRef.current === nextStatus) return;
+      lastViolationRef.current = nextStatus;
+      setStatus(nextStatus);
+      onViolation?.("DISQUALIFIED", { reason });
+    };
 
     const interval = setInterval(async () => {
       const video = webcamRef.current.video;
@@ -67,19 +88,13 @@ const Proctoring = ({ onViolation }) => {
 
         // ❌ NO FACE → DISQUALIFY
         if (detections.length === 0) {
-          setStatus("NO_FACE");
-          onViolation?.("DISQUALIFIED", {
-            reason: "No face detected"
-          });
+          emitViolation("NO_FACE", "No face detected");
           return;
         }
 
         // ❌ MULTIPLE FACES → DISQUALIFY
         if (detections.length > 1) {
-          setStatus("MULTIPLE_FACES");
-          onViolation?.("DISQUALIFIED", {
-            reason: "Multiple faces detected"
-          });
+          emitViolation("MULTIPLE_FACES", "Multiple faces detected");
           return;
         }
 
@@ -90,8 +105,7 @@ const Proctoring = ({ onViolation }) => {
         const rightEye = landmarks.getRightEye();
 
         // Calculate center
-        const eyeCenterX =
-          (leftEye[0].x + rightEye[3].x) / 2;
+        const eyeCenterX = (leftEye[0].x + rightEye[3].x) / 2;
 
         const noseX = nose[3].x;
 
@@ -99,16 +113,13 @@ const Proctoring = ({ onViolation }) => {
         const diff = Math.abs(noseX - eyeCenterX);
 
         if (diff > 25) {
-          setStatus("LOOKING_AWAY");
-          onViolation?.("DISQUALIFIED", {
-            reason: "User looking away"
-          });
+          emitViolation("LOOKING_AWAY", "User looking away");
           return;
         }
 
         // ✅ Everything OK
+        lastViolationRef.current = null;
         setStatus("ok");
-
       } catch (err) {
         console.log("Detection error:", err);
       }
@@ -123,11 +134,16 @@ const Proctoring = ({ onViolation }) => {
 
   const getColor = () => {
     switch (status) {
-      case "ok": return "green";
-      case "NO_FACE": return "orange";
-      case "MULTIPLE_FACES": return "red";
-      case "LOOKING_AWAY": return "red";
-      default: return "gray";
+      case "ok":
+        return "green";
+      case "NO_FACE":
+        return "orange";
+      case "MULTIPLE_FACES":
+        return "red";
+      case "LOOKING_AWAY":
+        return "red";
+      default:
+        return "gray";
     }
   };
 
@@ -142,7 +158,7 @@ const Proctoring = ({ onViolation }) => {
         overflow: "hidden",
         zIndex: 9999,
         cursor: isDragging ? "grabbing" : "grab",
-        transition: isDragging ? "none" : "all 0.1s ease"
+        transition: isDragging ? "none" : "all 0.1s ease",
       }}
       onMouseDown={handleMouseDown}
     >
@@ -162,7 +178,7 @@ const Proctoring = ({ onViolation }) => {
           background: "#000",
           color: getColor(),
           padding: 4,
-          userSelect: "none"
+          userSelect: "none",
         }}
       >
         {status}

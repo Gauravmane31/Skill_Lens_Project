@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gaurav Neural Portfolio</title>
+    <meta
+      name="description"
+      content="A Neural Network themed portfolio demo for a tech-focused personal website."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="grid-overlay" aria-hidden="true"></div>
+      <div class="glow glow-a" aria-hidden="true"></div>
+      <div class="glow glow-b" aria-hidden="true"></div>
+
+      <header class="site-header">
+        <div class="header-panel">
+          <a class="brand" href="#top">
+            <span class="brand-mark">Gaurav</span><span class="brand-dot">.</span>Neural
+          </a>
+
+          <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+            Menu
+          </button>
+
+          <nav class="site-nav" id="site-nav">
+            <a href="#about">About</a>
+            <a href="#projects">Projects</a>
+            <a href="#path">Path</a>
+            <a href="#stack">Stack</a>
+            <a href="#contact">Connect</a>
+          </nav>
+
+          <div class="header-actions">
+            <a class="button button-secondary" href="mailto:hello@example.com">Email</a>
+            <a class="button" href="#projects">View Work</a>
+          </div>
+        </div>
+      </header>
+
+      <main id="top" class="main-content">
+        <section class="hero">
+          <div class="hero-copy reveal">
+            <div class="eyebrow">
+              <span class="eyebrow-dot"></span>
+              Neural Network theme selected
+            </div>
+            <h1>
+              I build tech products that feel like
+              <span>live systems</span>, not static pages.
+            </h1>
+            <p class="hero-text">
+              This standalone portfolio demo presents your work like a capability graph. Projects,
+              strengths, and technical direction all connect into one visual system.
+            </p>
+
+            <div class="hero-actions">
+              <a class="button" href="#projects">Explore Projects</a>
+              <a class="button button-secondary" href="#contact">Start a Conversation</a>
+            </div>
+
+            <div class="signal-grid">
+              <article class="signal-card reveal">
+                <strong>08+</strong>
+                <span>Demo builds</span>
+                <p>Swap this with your real project count.</p>
+              </article>
+              <article class="signal-card reveal">
+                <strong>03</strong>
+                <span>Core lanes</span>
+                <p>AI workflows, full-stack systems, product UX.</p>
+              </article>
+              <article class="signal-card reveal">
+                <strong>24h</strong>
+                <span>Prototype speed</span>
+                <p>Built to signal fast execution and shipping confidence.</p>
+              </article>
+            </div>
+          </div>
+
+          <aside class="hero-panel reveal">
+            <div class="panel-topline">
+              <span>Live capability mesh</span>
+              <span>desktop responsive</span>
+            </div>
+            <h2>Neural work graph</h2>
+
+            <div class="network-visual">
+              <svg viewBox="0 0 360 360" aria-hidden="true">
+                <defs>
+                  <linearGradient id="network-edge" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="rgba(126,245,255,0.28)"></stop>
+                    <stop offset="100%" stop-color="rgba(103,161,255,0.04)"></stop>
+                  </linearGradient>
+                </defs>
+
+                <g class="edge-group">
+                  <line x1="70" y1="88" x2="136" y2="52"></line>
+                  <line x1="136" y1="52" x2="214" y2="96"></line>
+                  <line x1="214" y1="96" x2="286" y2="72"></line>
+                  <line x1="70" y1="88" x2="110" y2="182"></line>
+                  <line x1="110" y1="182" x2="188" y2="150"></line>
+                  <line x1="136" y1="52" x2="188" y2="150"></line>
+                  <line x1="188" y1="150" x2="254" y2="206"></line>
+                  <line x1="188" y1="150" x2="152" y2="262"></line>
+                  <line x1="152" y1="262" x2="292" y2="278"></line>
+                  <line x1="214" y1="96" x2="254" y2="206"></line>
+                  <line x1="286" y1="72" x2="254" y2="206"></line>
+                </g>
+
+                <g class="node-group">
+                  <circle cx="70" cy="88" r="22"></circle>
+                  <circle cx="136" cy="52" r="22"></circle>
+                  <circle cx="214" cy="96" r="22"></circle>
+                  <circle cx="286" cy="72" r="22"></circle>
+                  <circle cx="110" cy="182" r="22"></circle>
+                  <circle cx="188" cy="150" r="22"></circle>
+                  <circle cx="254" cy="206" r="22"></circle>
+                  <circle cx="152" cy="262" r="22"></circle>
+                  <circle cx="292" cy="278" r="22"></circle>
+                </g>
+              </svg>
+
+              <div class="network-label label-1">Interfaces</div>
+              <div class="network-label label-2">AI</div>
+              <div class="network-label label-3">Backend</div>
+              <div class="network-label label-4">Signal</div>
+              <div class="network-label label-5">UX</div>
+              <div class="network-label label-6">Logic</div>
+              <div class="network-label label-7">Systems</div>
+              <div class="network-label label-8">Prototyping</div>
+              <div class="network-label label-9">Launch</div>
+            </div>
+
+            <div class="signal-bars">
+              <div class="signal-row">
+                <div class="signal-meta">
+                  <span>AI workflows</span>
+                  <span>0.94</span>
+                </div>
+                <div class="bar-track"><span class="bar-fill cyan" data-value="94"></span></div>
+              </div>
+              <div class="signal-row">
+                <div class="signal-meta">
+                  <span>Frontend systems</span>
+                  <span>0.91</span>
+                </div>
+                <div class="bar-track"><span class="bar-fill mint" data-value="91"></span></div>
+              </div>
+              <div class="signal-row">
+                <div class="signal-meta">
+                  <span>Backend logic</span>
+                  <span>0.88</span>
+                </div>
+                <div class="bar-track"><span class="bar-fill blue" data-value="88"></span></div>
+              </div>
+              <div class="signal-row">
+                <div class="signal-meta">
+                  <span>Design instinct</span>
+                  <span>0.82</span>
+                </div>
+                <div class="bar-track"><span class="bar-fill coral" data-value="82"></span></div>
+              </div>
+            </div>
+          </aside>
+        </section>
+
+        <section class="content-section" id="about">
+          <div class="section-heading reveal">
+            <div class="eyebrow">
+              <span class="eyebrow-dot"></span>
+              About
+            </div>
+            <h2>The portfolio behaves like a connected system.</h2>
+            <p>
+              Instead of a generic hero and card stack, this concept turns your technical identity into a
+              visual graph. Every section supports the same story: you build products with logic, speed,
+              and clarity.
+            </p>
+          </div>
+
+          <div class="cluster-grid">
+            <article class="info-panel reveal">
+              <span class="cluster-tag cyan">Product-grade interfaces</span>
+              <p>I design interfaces that make complex behavior feel understandable, fast, and calm.</p>
+            </article>
+            <article class="info-panel reveal">
+              <span class="cluster-tag mint">AI-native workflows</span>
+              <p>I use models, evaluation loops, and automation as product features instead of side experiments.</p>
+            </article>
+            <article class="info-panel reveal">
+              <span class="cluster-tag blue">Systems that explain themselves</span>
+              <p>I like dashboards, state-rich apps, and tools where the logic is visible to the person using them.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="content-section" id="projects">
+          <div class="section-heading reveal">
+            <div class="eyebrow">
+              <span class="eyebrow-dot"></span>
+              Projects
+            </div>
+            <h2>Selected builds shown as high-signal nodes.</h2>
+            <p>
+              These project cards are structured to be easy for recruiters, clients, and collaborators to scan in seconds.
+            </p>
+          </div>
+
+          <div class="project-grid">
+            <article class="project-card reveal">
+              <div class="project-topline">
+                <span class="cluster-tag cyan">Demo case study</span>
+                <span class="project-index">01</span>
+              </div>
+              <h3>SkillLens</h3>
+              <p>
+                An AI-assisted coding evaluation platform that combines challenge solving, integrity scoring,
+                proctoring, and job-signal reporting.
+              </p>
+              <ul class="chip-list">
+                <li>Realtime scoring</li>
+                <li>Integrity tracking</li>
+                <li>Dashboard UX</li>
+              </ul>
+              <div class="stack-line cyan">React · Supabase · AI analysis · Webcam tooling</div>
+            </article>
+
+            <article class="project-card reveal">
+              <div class="project-topline">
+                <span class="cluster-tag mint">Concept build</span>
+                <span class="project-index">02</span>
+              </div>
+              <h3>MeshVision</h3>
+              <p>
+                A monitoring control room concept that turns live data streams into decisions with layered alerts,
+                review queues, and confidence states.
+              </p>
+              <ul class="chip-list">
+                <li>Event streams</li>
+                <li>Alert design</li>
+                <li>Review workflows</li>
+              </ul>
+              <div class="stack-line mint">TypeScript · Streaming UI · ML outputs · Chart systems</div>
+            </article>
+
+            <article class="project-card reveal">
+              <div class="project-topline">
+                <span class="cluster-tag blue">Portfolio demo</span>
+                <span class="project-index">03</span>
+              </div>
+              <h3>SignalForge</h3>
+              <p>
+                A tech-forward portfolio shell built to present engineering work like a living neural graph instead of a default template.
+              </p>
+              <ul class="chip-list">
+                <li>Motion system</li>
+                <li>Glass surfaces</li>
+                <li>Responsive storytelling</li>
+              </ul>
+              <div class="stack-line blue">HTML · CSS · JavaScript · Content architecture</div>
+            </article>
+          </div>
+        </section>
+
+        <section class="content-section" id="path">
+          <div class="section-heading reveal">
+            <div class="eyebrow">
+              <span class="eyebrow-dot"></span>
+              Path
+            </div>
+            <h2>Your journey becomes a visible signal path.</h2>
+            <p>
+              This section works well for hackathons, internships, freelance work, or self-driven learning arcs.
+            </p>
+          </div>
+
+          <div class="timeline">
+            <article class="timeline-item reveal">
+              <div class="timeline-year">NOW</div>
+              <div>
+                <h3>Building AI-first product demos</h3>
+                <p>Focused on product loops where interface design, evaluation logic, and fast execution all matter together.</p>
+              </div>
+            </article>
+
+            <article class="timeline-item reveal">
+              <div class="timeline-year">2025</div>
+              <div>
+                <h3>Shipping full-stack hackathon systems</h3>
+                <p>Turning raw ideas into working apps with authentication, data flow, dashboards, and meaningful feedback.</p>
+              </div>
+            </article>
+
+            <article class="timeline-item reveal">
+              <div class="timeline-year">2024</div>
+              <div>
+                <h3>Deepening the engineering core</h3>
+                <p>Strengthening React, backend APIs, problem solving, and the habit of learning by building real things.</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="content-section" id="stack">
+          <div class="section-heading reveal">
+            <div class="eyebrow">
+              <span class="eyebrow-dot"></span>
+              Stack
+            </div>
+            <h2>Grouped by clusters, not a random logo wall.</h2>
+            <p>
+              This reads cleaner than a badge cloud and makes your skillset feel more intentional.
+            </p>
+          </div>
+
+          <div class="stack-grid">
+            <article class="stack-card reveal">
+              <span class="cluster-tag cyan">Interface layer</span>
+              <div class="pill-grid">
+                <span>React</span>
+                <span>Vite</span>
+                <span>Responsive layouts</span>
+                <span>Interaction design</span>
+                <span>Design tokens</span>
+              </div>
+            </article>
+
+            <article class="stack-card reveal">
+              <span class="cluster-tag mint">Intelligence layer</span>
+              <div class="pill-grid">
+                <span>Prompt workflows</span>
+                <span>AI evaluation</span>
+                <span>Data interpretation</span>
+                <span>Automation logic</span>
+                <span>Feedback systems</span>
+              </div>
+            </article>
+
+            <article class="stack-card reveal">
+              <span class="cluster-tag blue">System layer</span>
+              <div class="pill-grid">
+                <span>Supabase</span>
+                <span>APIs</span>
+                <span>Auth</span>
+                <span>State design</span>
+                <span>Deployment patterns</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="content-section contact-section" id="contact">
+          <div class="contact-panel reveal">
+            <div class="contact-copy">
+              <div class="eyebrow">
+                <span class="eyebrow-dot"></span>
+                Contact node
+              </div>
+              <h2>Ready to turn this demo into your real portfolio?</h2>
+              <p>
+                The visual system is done. Next we can replace the demo copy with your actual bio, project links,
+                resume, and social handles.
+              </p>
+              <div class="hero-actions">
+                <a class="button" href="mailto:hello@example.com">Email Me</a>
+                <a class="button button-secondary" href="#top">Back to Top</a>
+              </div>
+            </div>
+
+            <div class="contact-links">
+              <a class="contact-card" href="mailto:hello@example.com">
+                <span>Email</span>
+                <strong>hello@example.com</strong>
+              </a>
+              <a class="contact-card" href="https://github.com/yourname" target="_blank" rel="noreferrer">
+                <span>GitHub</span>
+                <strong>github.com/yourname</strong>
+              </a>
+              <a class="contact-card" href="https://linkedin.com/in/yourname" target="_blank" rel="noreferrer">
+                <span>LinkedIn</span>
+                <strong>linkedin.com/in/yourname</strong>
+              </a>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <p>Standalone portfolio demo for Gaurav.</p>
+        <p>Built with a Neural Network visual direction.</p>
+        <p><span id="year"></span></p>
+      </footer>
+    </div>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
