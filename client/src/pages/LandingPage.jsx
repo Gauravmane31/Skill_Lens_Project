@@ -303,7 +303,7 @@ function LandingPage({ onGetStarted, onLogin }) {
                     whiteSpace: "pre-wrap",
                   }}
                 >
-{`def reverse_list(head):
+                  {`def reverse_list(head):
     prev = None
     while head:
         nxt = head.next
@@ -1344,23 +1344,16 @@ function LandingPage({ onGetStarted, onLogin }) {
                   marginBottom: 12,
                 }}
               >
-                <div
+                <img
+                  src="/Main-Dark-logo.png"
+                  alt="SkillLens Logo"
                   style={{
-                    width: 28,
-                    height: 28,
-                    background: C.indigoLight,
+                    width: 110,
+                    height: 45,
+                    objectFit: "",
                     borderRadius: 7,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 14,
                   }}
-                >
-                  🧠
-                </div>
-                <span style={{ fontWeight: 600, fontSize: 14, color: "#fff" }}>
-                  Skill<span style={{ color: C.indigoMid }}>Lens</span>
-                </span>
+                />
               </div>
               <p
                 style={{
