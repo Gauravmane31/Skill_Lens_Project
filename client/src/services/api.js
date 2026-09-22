@@ -296,6 +296,11 @@ const authRequest = async (path, body) => {
   return payload;
 };
 
+export const fetchLeaderboard = async () => {
+  const payload = await backendRequest("/api/leaderboard");
+  return Array.isArray(payload?.leaderboard) ? payload.leaderboard : [];
+};
+
 export const requestPasswordReset = async (email) => {
   return authRequest("/api/auth/reset-password", { email });
 };
@@ -352,10 +357,15 @@ const ensureProfile = async (user, overrides = {}) => {
     overrides.avatar ||
     user.user_metadata?.avatar_url ||
     (name ? name.charAt(0).toUpperCase() : "U");
+  const { data: existingProfile } = await supabase
+    .from("profiles")
+    .select("role, company")
+    .eq("id", user.id)
+    .maybeSingle();
   const role = normalizeRole(
-    overrides.role || user.user_metadata?.role || "student",
+    overrides.role || user.user_metadata?.role || existingProfile?.role || "student",
   );
-  const company = overrides.company ?? user.user_metadata?.company ?? null;
+  const company = overrides.company ?? user.user_metadata?.company ?? existingProfile?.company ?? null;
 
   const upsertPayload = {
     id: user.id,
@@ -481,7 +491,7 @@ export const syncUserProfile = async (
   _email,
   name = "",
   avatar = "",
-  role = "student",
+  role = "",
 ) => {
   const user = await ensureAuthenticatedUser();
   return ensureProfile(user, { name, avatar, role });

@@ -68,6 +68,8 @@ function AuthGate({ onLogin, onBack, mode: initMode = "login" }) {
             avatar: data.user.avatar || resolvedName?.charAt(0)?.toUpperCase() || "U",
             points: 0,
             streak: 0,
+            role: data.user.role || "student",
+            company: data.user.company || null,
             provider: data.user.provider || "email",
           });
         }
@@ -95,6 +97,8 @@ function AuthGate({ onLogin, onBack, mode: initMode = "login" }) {
               avatar: data.user.avatar || (accountType === "recruiter" ? companyName : name).charAt(0).toUpperCase(),
               points: 0,
               streak: 0,
+              role: data.user.role || accountType,
+              company: data.user.company || (accountType === "recruiter" ? companyName : null),
               provider: data.user.provider || "email",
             });
           }

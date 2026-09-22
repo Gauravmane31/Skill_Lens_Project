@@ -5,7 +5,7 @@ import { scoreColor, integrityLabel, jobSuggestionsFallback, skillGapsFallback, 
 import useBreakpoint from "../hooks/useBreakpoint.js";
 import { Badge, ProgressBar, CircleScore, Card, SectionHeader, Pill, LensCorners } from "../components/common/Atoms.jsx";
 import CompanyLogo from "../components/common/CompanyLogo.jsx";
-import { fetchUserProfile, fetchLearningPath, fetchCareerGuidance, fetchGapAnalysis } from "../services/api.js";
+import { fetchUserProfile, fetchLearningPath, fetchCareerGuidance, fetchGapAnalysis, fetchLeaderboard } from "../services/api.js";
 import { useState, useEffect } from "react";
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -16,12 +16,14 @@ function DashboardPage({results,user,setPage}){
   const [learningPath, setLearningPath] = useState([]);
   const [careerGuidance, setCareerGuidance] = useState(null);
   const [gapAnalysis, setGapAnalysis] = useState(null);
+  const [leaderboard, setLeaderboard] = useState([]);
 
   useEffect(() => {
     if (user?.id) {
        fetchUserProfile(user.id).then(setProfileData).catch(console.error);
        fetchLearningPath(user.id).then(setLearningPath).catch(console.error);
        fetchCareerGuidance(user.id).then(setCareerGuidance).catch(console.error);
+      fetchLeaderboard().then(setLeaderboard).catch(console.error);
     }
   }, [user?.id]);
 
@@ -100,6 +102,9 @@ function DashboardPage({results,user,setPage}){
   });
   const activityTotal = activityDays.reduce((sum, day) => sum + day.count, 0);
   const bestActivityDay = activityDays.reduce((best, day) => day.count > best.count ? day : best, { label: "—", count: 0 });
+  const rankedUsers = [...leaderboard]
+    .sort((a, b) => b.pts - a.pts)
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
 
   return(
     <div style={{overflowY:"auto",flex:1,background:C.bg}}>
@@ -327,6 +332,33 @@ function DashboardPage({results,user,setPage}){
                 ))}
               </Card>
             )}
+
+            <Card>
+              <SectionHeader
+                title="🏆 Global Ranking"
+                sub={leaderboard.length ? `${leaderboard.length} registered users ranked by XP` : "Loading registered users..."}
+                action={<button onClick={() => setPage("leaderboard")} style={{background:"none",border:"none",color:C.indigo,fontWeight:700,fontSize:13,cursor:"pointer"}}>Full leaderboard →</button>}
+              />
+              {rankedUsers.length ? (
+                <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:420,overflowY:"auto"}}>
+                  {rankedUsers.map((entry) => (
+                    <div key={entry.id} style={{display:"grid",gridTemplateColumns:"34px 1fr auto",alignItems:"center",gap:10,padding:"9px 10px",borderRadius:9,background:entry.id === user?.id ? C.indigoLight : C.bg,border:entry.id === user?.id ? `1px solid ${C.indigo}44` : `1px solid ${C.border}`}}>
+                      <div style={{fontWeight:800,fontSize:13,color:entry.rank <= 3 ? C.amber : C.muted,textAlign:"center"}}>#{entry.rank}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+                        <div style={{width:28,height:28,borderRadius:"50%",background:C.indigo,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0}}>{entry.avatar}</div>
+                        <div style={{minWidth:0}}>
+                          <div style={{fontSize:12,fontWeight:700,color:entry.id === user?.id ? C.indigo : C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{entry.name}{entry.id === user?.id ? " (You)" : ""}</div>
+                          <div style={{fontSize:10,color:C.muted}}>{entry.solved} solved · {entry.avgScore}% avg score</div>
+                        </div>
+                      </div>
+                      <div style={{fontSize:12,fontWeight:800,color:C.indigo}}>{entry.pts.toLocaleString()} XP</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{padding:20,textAlign:"center",background:C.bg,borderRadius:10,color:C.muted,fontSize:12}}>No ranking data available yet.</div>
+              )}
+            </Card>
           </div>
         </div>
       </div>

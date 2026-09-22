@@ -1,6 +1,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
-import { C, JOB_BOARD } from "../constants/constants.js";
+import { C } from "../constants/constants.js";
 import { scoreColor } from "../utils/scoring.js";
 import useBreakpoint from "../hooks/useBreakpoint.js";
 import { PageHero, Card, SectionHeader, inputSt, Pill, Badge, ProgressBar } from "../components/common/Atoms.jsx";
@@ -15,11 +15,44 @@ function JobBoardPage({ results, setPage }) {
   const [matchFilter, setMatchFilter] = useState("All");
   const [selectedJob, setSelectedJob] = useState(null);
   const [applied, setApplied] = useState(new Set());
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const types = ["All", "Full-time", "Internship"];
   const matchFilters = ["All", "90%+ Match", "80%+ Match", "70%+ Match"];
 
-  const filtered = JOB_BOARD
+  useEffect(() => {
+    let mounted = true;
+    fetchJobRecommendations()
+      .then((recommendations) => {
+        if (!mounted) return;
+        setJobs((recommendations || []).map(({ job, matchScore, matchReasons }) => ({
+          id: job.id,
+          title: job.title,
+          company: job.company,
+          description: job.description,
+          location: "See role description",
+          salary: "Contact company",
+          type: "Full-time",
+          posted: job.created_at ? new Date(job.created_at).toLocaleDateString() : "Recently",
+          skills: Array.isArray(job.required_skills) ? job.required_skills : [],
+          domain: job.domain,
+          match: Number(matchScore || 0),
+          matchReasons: matchReasons || [],
+          hot: Number(matchScore || 0) >= 85,
+        })));
+      })
+      .catch((error) => {
+        console.error("Failed to load live jobs:", error);
+        if (mounted) setJobs([]);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => { mounted = false; };
+  }, []);
+
+  const filtered = jobs
     .filter(j => typeFilter === "All" || j.type === typeFilter)
     .filter(j => matchFilter === "All" || (matchFilter === "90%+ Match" && j.match >= 90) || (matchFilter === "80%+ Match" && j.match >= 80) || (matchFilter === "70%+ Match" && j.match >= 70))
     .filter(j => !search || j.title.toLowerCase().includes(search.toLowerCase()) || j.company.toLowerCase().includes(search.toLowerCase()) || j.skills.some(s => s.toLowerCase().includes(search.toLowerCase())));
@@ -28,7 +61,7 @@ function JobBoardPage({ results, setPage }) {
 
   return (
     <div style={{ overflowY: "auto", flex: 1, background: C.bg }}>
-      <PageHero tag="💼 Job Board" title="Your Matched Opportunities" sub={`${JOB_BOARD.length} live roles matched to your SkillLens profile.`}
+      <PageHero tag="💼 Job Board" title="Your Matched Opportunities" sub={`${jobs.length} live roles matched to your SkillLens profile.`}
         extras={avgScore ? (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <div style={{ background: "rgba(255,255,255,.07)", borderRadius: 10, padding: "7px 12px" }}>
@@ -58,9 +91,9 @@ function JobBoardPage({ results, setPage }) {
         {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 12, marginBottom: 16 }}>
           {[
-            { v: JOB_BOARD.length, l: "Live Roles", a: C.indigo },
-            { v: JOB_BOARD.filter(j => j.hot).length, l: "🔥 Hot", a: C.red },
-            { v: JOB_BOARD.filter(j => j.match >= 80).length, l: "Strong Match", a: C.green },
+            { v: jobs.length, l: "Live Roles", a: C.indigo },
+            { v: jobs.filter(j => j.hot).length, l: "🔥 Hot", a: C.red },
+            { v: jobs.filter(j => j.match >= 80).length, l: "Strong Match", a: C.green },
             { v: applied.size, l: "Applied", a: C.amber },
           ].map(s => (
             <Card key={s.l} style={{ padding: "12px 14px", textAlign: "center" }}>
@@ -85,11 +118,15 @@ function JobBoardPage({ results, setPage }) {
         <div style={{ display: "grid", gridTemplateColumns: selectedJob && !isMobile ? "1fr 380px" : "1fr", gap: 16 }}>
           {/* Job list */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {filtered.length === 0 ? (
+            {loading ? (
+              <Card style={{ textAlign: "center", padding: "40px 20px" }}>
+                <div style={{ fontSize: 14, color: C.muted }}>Loading live jobs...</div>
+              </Card>
+            ) : filtered.length === 0 ? (
               <Card style={{ textAlign: "center", padding: "40px 20px" }}>
                 <div style={{ fontSize: 40, marginBottom: 10 }}>💼</div>
-                <h3 style={{ fontWeight: 600, marginBottom: 6 }}>No matching jobs</h3>
-                <p style={{ color: C.muted, fontSize: 13 }}>Try adjusting your filters.</p>
+                <h3 style={{ fontWeight: 600, marginBottom: 6 }}>{jobs.length ? "No matching jobs" : "No live jobs yet"}</h3>
+                <p style={{ color: C.muted, fontSize: 13 }}>{jobs.length ? "Try adjusting your filters." : "Recruiter-posted roles will appear here when they are published."}</p>
               </Card>
             ) : filtered.map(job => (
               <div key={job.id} className="sl-card-hover" onClick={() => setSelectedJob(selectedJob?.id === job.id ? null : job)}

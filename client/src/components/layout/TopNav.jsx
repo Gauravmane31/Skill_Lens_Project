@@ -12,8 +12,8 @@ function TopNav({ page, setPage, user, onLogout, notifications, markNotifsRead }
 
   const navItems = isRecruiter
     ? [
-        { id: "recruiter", label: "Dashboard", icon: "🏠" },
-        { id: "leaderboard", label: "Leaderboard", icon: "🏆" },
+        { id: "recruiter", label: "Recruiter Console", icon: "🏢" },
+        { id: "leaderboard", label: "Platform Leaderboard", icon: "🏆" },
       ]
     : [
         { id: "dashboard", label: "Dashboard", icon: "🏠" },

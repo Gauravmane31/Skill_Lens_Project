@@ -144,8 +144,61 @@ function userPayload(user) {
       .slice(0, 2),
     avatarUrl: user.user_metadata?.avatar_url || null,
     provider: user.app_metadata?.provider || "email",
+    role: user.user_metadata?.role || "student",
+    company: user.user_metadata?.company || null,
     points: 0,
   };
+}
+
+async function syncAuthProfileRole(user) {
+  const metadataRole = String(user.user_metadata?.role || "").toLowerCase();
+  if (!['recruiter', 'admin'].includes(metadataRole)) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("profiles")
+    .update({
+      role: metadataRole,
+      company: user.user_metadata?.company || undefined,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", user.id)
+    .select("id, role, company")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to synchronize recruiter profile role:", error.message);
+    return null;
+  }
+
+  return data;
+}
+
+async function fetchAllRows(table, columns) {
+  const pageSize = 1000;
+  const rows = [];
+
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabaseAdmin
+      .from(table)
+      .select(columns)
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) return rows;
+  }
+}
+
+async function fetchAllAuthUsers() {
+  const users = [];
+  const perPage = 1000;
+
+  for (let page = 1; ; page += 1) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    users.push(...(data?.users || []));
+    if (!data?.users || data.users.length < perPage) return users;
+  }
 }
 
 async function requireUser(req, res, next) {
@@ -172,11 +225,26 @@ async function requireRecruiter(req, res, next) {
       .maybeSingle();
 
     if (error) return res.status(500).json({ error: error.message });
-    if (!profile || !["recruiter", "admin"].includes(profile.role)) {
+    const metadataRole = String(req.user.user_metadata?.role || "").toLowerCase();
+    const role = profile?.role || metadataRole;
+    if (!["recruiter", "admin"].includes(role)) {
       return res.status(403).json({ error: "Recruiter access required." });
     }
 
-    req.profile = profile;
+    if (!profile || profile.role !== role) {
+      await supabaseAdmin
+        .from("profiles")
+        .upsert({
+          id: req.user.id,
+          email: req.user.email,
+          name: req.user.user_metadata?.full_name || req.user.email?.split("@")[0] || "Recruiter",
+          role,
+          company: req.user.user_metadata?.company || null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "id" });
+    }
+
+    req.profile = { ...(profile || {}), role };
     return next();
   } catch {
     return res.status(403).json({ error: "Recruiter access required." });
@@ -581,6 +649,55 @@ app.get("/api/languages", (_req, res) => {
   res.json({ languages: LANGUAGES });
 });
 
+// ── GLOBAL LEADERBOARD ───────────────────────────────────────────────────────
+app.get("/api/leaderboard", requireUser, asyncRoute(async (_req, res) => {
+  const [authUsers, profiles, submissions] = await Promise.all([
+    fetchAllAuthUsers(),
+    fetchAllRows("profiles", "id, name, avatar, points, streak, role"),
+    fetchAllRows("submissions", "user_id, challenge_id, code_score, integrity_score"),
+  ]);
+  const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
+
+  const statsByUser = new Map();
+  submissions.forEach((submission) => {
+    const stats = statsByUser.get(submission.user_id) || {
+      solvedSet: new Set(), scoreSum: 0, integritySum: 0, count: 0,
+    };
+    stats.solvedSet.add(submission.challenge_id);
+    stats.scoreSum += Number(submission.code_score || 0);
+    stats.integritySum += Number(submission.integrity_score || 0);
+    stats.count += 1;
+    statsByUser.set(submission.user_id, stats);
+  });
+
+  const roster = authUsers.map((authUser) => ({
+    authUser,
+    profile: profilesById.get(authUser.id) || {},
+  }));
+  const maxPoints = Math.max(1, ...roster.map(({ profile }) => Number(profile.points || 0)));
+  const leaderboard = roster.map(({ authUser, profile }) => {
+    const stats = statsByUser.get(authUser.id);
+    const avgScore = stats?.count ? Math.round(stats.scoreSum / stats.count) : 0;
+    const avgIntegrity = stats?.count ? Math.round(stats.integritySum / stats.count) : 0;
+    const points = Number(profile.points || 0);
+
+    return {
+      id: profile.id,
+      name: profile.name || authUser.user_metadata?.full_name || authUser.email?.split("@")[0] || "Anonymous",
+      avatar: profile.avatar || (profile.name || authUser.email || "U").charAt(0).toUpperCase(),
+      pts: points,
+      solved: stats?.solvedSet.size || 0,
+      streak: Number(profile.streak || 0),
+      avgScore,
+      avgIntegrity,
+      combined: Math.round(avgIntegrity * 0.4 + avgScore * 0.3 + (points / maxPoints) * 30),
+      role: profile.role || "student",
+    };
+  });
+
+  return res.json({ leaderboard });
+}));
+
 // ── CODE EXECUTION — Judge0 ─────────────────────────────────────────────────
 // POST /api/run
 // Body: { language, code, stdin?, challengeData? }
@@ -722,8 +839,21 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     return res.status(400).json({ error: message });
   }
 
+  await syncAuthProfileRole(data.user);
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("role, company, points, streak")
+    .eq("id", data.user.id)
+    .maybeSingle();
+
   return res.json({
-    user: userPayload(data.user),
+    user: {
+      ...userPayload(data.user),
+      role: profile?.role || userPayload(data.user).role,
+      company: profile?.company || userPayload(data.user).company,
+      points: Number(profile?.points || 0),
+      streak: Number(profile?.streak || 0),
+    },
     accessToken: data.session.access_token,
     refreshToken: data.session.refresh_token,
   });

@@ -138,7 +138,14 @@ export default function SkillLens() {
       console.error("Failed to sync user profile:", e);
     }
 
-    const resolvedRole = syncedProfile?.role || user?.role || "student";
+    const previousRole = String(user?.role || "").toLowerCase();
+    const metadataRole = String(sUser.user_metadata?.role || "").toLowerCase();
+    const syncedRole = String(syncedProfile?.role || "").toLowerCase();
+    const resolvedRole = ["recruiter", "admin"].includes(previousRole)
+      ? previousRole
+      : ["recruiter", "admin"].includes(metadataRole)
+        ? metadataRole
+        : syncedRole || "student";
     setUser((prev) => ({
       id: sUser.id,
       name: name,

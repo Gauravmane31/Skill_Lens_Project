@@ -36,7 +36,17 @@ const EMPTY_PROFILE = {
   certifications: [],
 };
 
-GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
+const normalizeProfile = (saved = {}, user = {}) => ({
+  ...EMPTY_PROFILE,
+  fullName: user?.name || "",
+  email: user?.email || "",
+  ...saved,
+  skills: Array.isArray(saved.skills) ? saved.skills : [],
+  experience: Array.isArray(saved.experience) ? saved.experience : [],
+  education: Array.isArray(saved.education) ? saved.education : [],
+  languages: Array.isArray(saved.languages) ? saved.languages : [],
+  certifications: Array.isArray(saved.certifications) ? saved.certifications : [],
+});
 
 const uniq = (arr = []) =>
   Array.from(
@@ -840,11 +850,7 @@ function ResumePage({ user, results }) {
       try {
         const saved = await loadResumeProfile();
         if (!mounted || !saved || typeof saved !== "object") return;
-        setProfile((p) => ({
-          ...EMPTY_PROFILE,
-          ...p,
-          ...saved,
-        }));
+        setProfile((p) => normalizeProfile({ ...p, ...saved }, user));
       } catch {
         // Fallback to local draft if backend persistence is unavailable.
         try {
@@ -852,11 +858,7 @@ function ResumePage({ user, results }) {
           if (!mounted || !localRaw) return;
           const localSaved = JSON.parse(localRaw);
           if (!localSaved || typeof localSaved !== "object") return;
-          setProfile((p) => ({
-            ...EMPTY_PROFILE,
-            ...p,
-            ...localSaved,
-          }));
+          setProfile((p) => normalizeProfile({ ...p, ...localSaved }, user));
         } catch {
           // Ignore malformed local cache.
         }

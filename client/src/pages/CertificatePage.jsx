@@ -41,7 +41,7 @@ function CertificatePage({results,user}){
             <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
               {/* Certificate */}
               <div style={{flex:"1 1 400px"}}>
-                <div style={{background:C.white,borderRadius:14,padding:isMobile?24:44,border:`2px solid ${C.indigoLight}`,position:"relative",overflow:"hidden"}}>
+                <div className="sl-certificate-print" style={{background:C.white,borderRadius:14,padding:isMobile?24:44,border:`2px solid ${C.indigoLight}`,position:"relative",overflow:"hidden"}}>
                   <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,background:C.indigoLight,borderRadius:"50%",opacity:.7}}/>
                   <div style={{position:"absolute",bottom:-20,left:-20,width:90,height:90,background:latest.challenge.pastel,borderRadius:"50%",opacity:.8}}/>
                   <div style={{position:"relative"}}>

@@ -4,6 +4,7 @@ import { C, CHALLENGES } from "../constants/constants.js";
 import useBreakpoint from "../hooks/useBreakpoint.js";
 import { PageHero, Card, SectionHeader, Pill, Avatar } from "../components/common/Atoms.jsx";
 import { supabase } from "../services/supabase.js";
+import { fetchLeaderboard as fetchLeaderboardApi } from "../services/api.js";
 
 // ── Leaderboard Page (Real-time) ──────────────────────────────────────────────
 function LeaderboardPage({ user, results }) {
@@ -21,61 +22,14 @@ function LeaderboardPage({ user, results }) {
     const fetchLeaderboard = async () => {
       setLoading(true);
       try {
-        // Fetch all user profiles with their stats
-        const { data: profiles, error } = await supabase
-          .from("profiles")
-          .select("id, full_name, avatar_url, points, streak, role")
-          .order("points", { ascending: false })
-          .limit(100);
-
-        if (error) throw error;
-
-        // Fetch submissions with scores for each user (for solved count + integrity/score aggregates)
-        const { data: submissions, error: subError } = await supabase
-          .from("submissions")
-          .select("user_id, challenge_id, code_score, integrity_score")
-          .order("created_at", { ascending: false });
-
-        if (subError) throw subError;
-
-        // Aggregate per-user: unique solved challenges, avg code score, avg integrity score
-        const statsByUser = {};
-        submissions?.forEach(sub => {
-          if (!statsByUser[sub.user_id]) {
-            statsByUser[sub.user_id] = { solvedSet: new Set(), scoreSum: 0, integritySum: 0, count: 0 };
-          }
-          const s = statsByUser[sub.user_id];
-          s.solvedSet.add(sub.challenge_id);
-          s.scoreSum += Number(sub.code_score || 0);
-          s.integritySum += Number(sub.integrity_score || 0);
-          s.count += 1;
-        });
-
-        const maxPoints = Math.max(1, ...(profiles || []).map(p => p.points || 0));
-
-        // Combine and format leaderboard data
-        const formattedLeaderboard = profiles?.map((profile, index) => {
-          const s = statsByUser[profile.id];
-          const avgScore = s && s.count ? Math.round(s.scoreSum / s.count) : 0;
-          const avgIntegrity = s && s.count ? Math.round(s.integritySum / s.count) : 0;
-          const xpNormalized = Math.round(((profile.points || 0) / maxPoints) * 100);
-          const combined = Math.round(avgIntegrity * 0.4 + avgScore * 0.3 + xpNormalized * 0.3);
-          return {
-            rank: index + 1,
-            id: profile.id,
-            name: profile.full_name || "Anonymous",
-            avatar: profile.avatar_url ? profile.avatar_url[0].toUpperCase() : "U",
-            pts: profile.points || 0,
-            solved: s?.solvedSet.size || 0,
-            streak: profile.streak || 0,
-            avgScore,
-            avgIntegrity,
-            combined,
-            badge: index < 3 ? ["⭐", "✨", "🌟"][index] : "🔥",
-            country: "🌍",
-            isYou: profile.id === user?.id
-          };
-        }) || [];
+        const profiles = await fetchLeaderboardApi();
+        const formattedLeaderboard = profiles.map((profile, index) => ({
+          ...profile,
+          rank: index + 1,
+          badge: index < 3 ? ["⭐", "✨", "🌟"][index] : "🔥",
+          country: "🌍",
+          isYou: profile.id === user?.id,
+        }));
 
         setLeaderboard(formattedLeaderboard);
 
@@ -89,6 +43,7 @@ function LeaderboardPage({ user, results }) {
           const userPoints = user?.points || totalXP;
           const ownAvgScore = results.length ? Math.round(results.reduce((a, r) => a + r.codeScore, 0) / results.length) : 0;
           const ownAvgIntegrity = results.length ? Math.round(results.reduce((a, r) => a + r.integrityScore, 0) / results.length) : 0;
+          const maxPoints = Math.max(1, ...formattedLeaderboard.map(p => p.pts || 0), userPoints);
           const ownXpNormalized = Math.round((userPoints / maxPoints) * 100);
           const ownCombined = Math.round(ownAvgIntegrity * 0.4 + ownAvgScore * 0.3 + ownXpNormalized * 0.3);
 
@@ -157,14 +112,9 @@ function LeaderboardPage({ user, results }) {
       .map((p, i) => ({ ...p, rank: i + 1 }));
   }, [leaderboard, userRank, tab]);
 
-  // Get top 10 for display (or show loading)
-  const displayBoard = loading ? [] : rankedBoard.slice(0, 10);
-
-  // Include current user in the display if not in top 10
+  // Display the complete ranked board so every registered profile is visible.
+  const displayBoard = loading ? [] : rankedBoard;
   const youInRanked = rankedBoard.find(p => p.isYou);
-  if (!loading && youInRanked && !displayBoard.find(p => p.isYou)) {
-    displayBoard.push(youInRanked);
-  }
 
   return (
     <div style={{ overflowY: "auto", flex: 1, background: C.bg }}>

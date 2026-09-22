@@ -47,6 +47,11 @@ body{font-family:'Space Grotesk',sans-serif;}
   .sl-user-name{display:none !important;}
 }
 .sl-page-wrap{max-width:1280px;margin:0 auto;width:100%;}
+@media print{
+  body *{visibility:hidden !important;}
+  .sl-certificate-print,.sl-certificate-print *{visibility:visible !important;}
+  .sl-certificate-print{position:absolute !important;inset:0 !important;width:100% !important;margin:0 !important;box-shadow:none !important;}
+}
 `;
 function GlobalStyle(){
   useEffect(()=>{
